@@ -368,7 +368,7 @@ function sectionFromHash() {
     history.replaceState(null, '', window.location.pathname);
     return 'integracoes';
   }
-  const map = { emails: 'conta', relatorios: 'relatorios', 'relatorio-mensal': 'relatorio-mensal', desempenho: 'desempenho', solicitacoes: 'solicitacoes', integracoes: 'integracoes' };
+  const map = { emails: 'conta', relatorios: 'relatorios', 'relatorio-mensal': 'relatorio-mensal', desempenho: 'desempenho', solicitacoes: 'solicitacoes', integracoes: 'integracoes', 'contas-de-anuncio': 'contas-clientes' };
   const target = map[h];
   const item = MENU.find((m) => m.id === target);
   return target && item && myLevel() >= item.min ? target : 'inicio';
