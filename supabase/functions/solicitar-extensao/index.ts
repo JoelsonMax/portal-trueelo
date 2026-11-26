@@ -2,7 +2,7 @@
 // 1) registra o pedido (aparece em "Solicitações" no painel da True Elo);
 // 2) envia e-mail para o Administrador Proprietário e uma confirmação para o cliente,
 //    se o serviço de e-mail (Brevo) estiver configurado nos segredos da função:
-//    BREVO_API_KEY, BREVO_SENDER_EMAIL (e opcional BREVO_SENDER_NAME, NOTIFY_EMAIL).
+//    BREVO_API_KEY (e opcionais BREVO_SENDER_EMAIL, BREVO_SENDER_NAME, NOTIFY_EMAIL).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -20,7 +20,7 @@ const esc = (v: unknown) =>
 
 async function sendEmail(to: { email: string; name?: string }, subject: string, html: string) {
   const apiKey = Deno.env.get("BREVO_API_KEY");
-  const sender = Deno.env.get("BREVO_SENDER_EMAIL");
+  const sender = Deno.env.get("BREVO_SENDER_EMAIL") || "agenciatrueelo@gmail.com"; // remetente verificado no Brevo
   if (!apiKey || !sender) return false;
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
