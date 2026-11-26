@@ -116,9 +116,9 @@ Deno.serve(async (req) => {
     // Confirmação para o cliente
     await sendEmail(
       { email: me.email, name: me.name },
-      "Recebemos sua solicitação de extensão",
+      `${me.name}, recebemos sua solicitação de extensão`,
       layout("Solicitação recebida!", `
-        <p style="margin:0 0 10px;line-height:1.6">Olá, ${esc(String(me.name).split(" ")[0])}! Recebemos seu pedido para estender o serviço por <strong>${months} meses</strong>.</p>
+        <p style="margin:0 0 10px;line-height:1.6">Olá, ${esc(me.name)}! Recebemos seu pedido para estender o serviço por <strong>${months} meses</strong>.</p>
         <p style="margin:0;line-height:1.6;color:#cdd3e3">A equipe da True Elo vai entrar em contato em breve para combinar os detalhes.</p>`),
     );
 

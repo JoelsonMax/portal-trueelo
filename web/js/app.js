@@ -41,6 +41,9 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const initials = (name) => (name || '?').trim().split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+// Nome completo para cumprimentos (clientes costumam ser empresas: "G.I Fabricações" não vira "G.I").
+const greetName = () => (state.profile?.name || '').trim();
+const withName = (text) => (greetName() ? `${greetName()}, ${text.charAt(0).toLowerCase()}${text.slice(1)}` : text);
 const firstName = (name) => (name || '').trim().split(/\s+/)[0] || '';
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Nunca acessou');
@@ -210,6 +213,8 @@ async function logout() {
 // ---------------------------------------------------------------------
 function bindStaticEvents() {
   document.addEventListener('click', (e) => {
+    const sectionBtn = e.target.closest('[data-go-section]');
+    if (sectionBtn && state.profile) { goSection(sectionBtn.dataset.goSection); return; }
     const go = e.target.closest('[data-go]');
     if (go) { show(go.dataset.go); return; }
     const action = e.target.closest('[data-action]')?.dataset.action;
@@ -275,6 +280,7 @@ function bindStaticEvents() {
         return;
       }
       toast('Senha salva com sucesso!');
+      state.justSetPassword = true;
       await enterApp();
     });
   });
@@ -317,6 +323,10 @@ function renderShell() {
   $('#user-avatar').textContent = initials(p.name || p.email);
   $('#user-name').textContent = p.name || p.email;
   $('#user-role').textContent = roleLabel(p.role);
+  const top = $('#topbar-user');
+  if (top) { top.textContent = initials(p.name || p.email); top.title = p.name || p.email; }
+  if (p.name) toast(state.justSetPassword ? `Bem-vindo à True Elo, ${p.name}!` : `Olá, ${p.name}!`, 'ok');
+  state.justSetPassword = false;
 
   $('#menu').innerHTML = MENU.filter((m) => myLevel() >= m.min).map((m) => m.group
     ? `<div class="menu-group">${esc(m.group)}</div>`
@@ -329,6 +339,8 @@ function renderShell() {
     $('.app').classList.remove('menu-open');
   }));
 }
+
+function goSection(id) { go(id); }
 
 function go(sectionId) {
   const item = MENU.find((m) => m.id === sectionId);
@@ -700,7 +712,7 @@ const statusLine = (s) => {
 // ---------------------------------------------------------------------
 async function renderHome(el) {
   const p = state.profile;
-  const name = firstName(p.name);
+  const name = greetName();
   el.innerHTML = `
     <div class="page-head">
       <div>
@@ -772,7 +784,7 @@ async function renderHome(el) {
 // ---------------------------------------------------------------------
 async function renderDocuments(el) {
   el.innerHTML = `
-    <div class="page-head"><div><h1>Central de Documentos</h1><p class="muted">Aqui você encontra documentos enviados pela True Elo.</p></div></div>
+    <div class="page-head"><div><h1>Central de Documentos</h1><p class="muted">${esc(isClient() ? withName('Aqui você encontra os documentos enviados pela True Elo.') : 'Documentos enviados pela True Elo para os clientes.')}</p></div></div>
     <div class="toolbar" id="docs-toolbar"></div>
     <div id="docs-list" class="grid grid-3">${loadingCard()}</div>`;
 
@@ -837,7 +849,7 @@ function timelineDetail(s) {
 
 async function renderTimeline(el) {
   el.innerHTML = `
-    <div class="page-head"><div><h1>Linha do Tempo do Serviço</h1><p class="muted">Acompanhe o andamento do seu contrato com a True Elo.</p></div></div>
+    <div class="page-head"><div><h1>Linha do Tempo do Serviço</h1><p class="muted">${esc(isClient() ? withName('Acompanhe o andamento do seu contrato com a True Elo.') : 'Andamento dos contratos dos clientes.')}</p></div></div>
     <div id="timeline-box">${loadingCard()}</div>`;
   const box = $('#timeline-box', el);
 
@@ -851,7 +863,7 @@ async function renderTimeline(el) {
       ${data ? `<div class="card">${timelineDetail(data)}</div>` : emptyCard('clock', 'Nenhum serviço em andamento')}
       <div class="card extend-card">
         <div class="row-main">
-          <h4>Quer continuar com a True Elo?</h4>
+          <h4>${esc(greetName() ? `${greetName()}, quer continuar com a True Elo?` : 'Quer continuar com a True Elo?')}</h4>
           <p>${req
             ? `Você solicitou estender por <strong>${req.months} meses</strong> em ${fmtDate(req.created_at)}. Nossa equipe vai falar com você em breve.`
             : 'Solicite a extensão do seu serviço em poucos cliques.'}</p>
@@ -882,7 +894,7 @@ async function renderTimeline(el) {
 // ---------------------------------------------------------------------
 async function renderReports(el) {
   el.innerHTML = `
-    <div class="page-head"><div><h1>Central de Relatórios</h1><p class="muted">Histórico de relatórios do seu projeto.</p></div></div>
+    <div class="page-head"><div><h1>Central de Relatórios</h1><p class="muted">${esc(isClient() ? withName('Aqui está o histórico de relatórios do seu projeto.') : 'Relatórios enviados para os clientes.')}</p></div></div>
     <div class="toolbar">
       <label class="inline-label">Filtrar por data<input type="month" id="rep-month"></label>
       <span id="rep-client-wrap"></span>
@@ -1354,7 +1366,7 @@ function showExtendSuccess(months) {
     <div class="center">
       <div class="status-icon status-ok" style="margin:0 auto 14px">✓</div>
       <h3 style="margin-bottom:8px">Solicitação enviada com sucesso!</h3>
-      <p class="muted">Recebemos seu pedido para estender o serviço por <strong>${months} meses</strong>. A equipe da True Elo vai entrar em contato em breve.</p>
+      <p class="muted">${name ? `Obrigado, <strong>${esc(name)}</strong>! ` : ''}Recebemos seu pedido para estender o serviço por <strong>${months} meses</strong>. A equipe da True Elo vai entrar em contato em breve.</p>
       <p class="muted small">Se preferir, fale com a gente agora pelo WhatsApp:</p>
     </div>
     <div class="modal-actions" style="flex-direction:column">
@@ -1415,7 +1427,7 @@ async function renderRequests(el) {
       const svc = services.find((s) => s.client_id === x.client_id);
       const contact = phones[x.client_id] || {};
       const phone = (contact.phone || '').replace(/\D/g, '');
-      const wa = phone ? `https://wa.me/${phone.length <= 11 ? '55' + phone : phone}?text=${encodeURIComponent(`Olá, ${firstName(clientName(x.client_id))}! Recebemos sua solicitação para estender o serviço por ${x.months} meses.`)}` : null;
+      const wa = phone ? `https://wa.me/${phone.length <= 11 ? '55' + phone : phone}?text=${encodeURIComponent(`Olá, ${clientName(x.client_id)}! Recebemos sua solicitação para estender o serviço por ${x.months} meses.`)}` : null;
       return `
         <div class="card">
           <div class="row" style="padding:0;align-items:flex-start">

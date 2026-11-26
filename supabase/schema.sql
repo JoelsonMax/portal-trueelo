@@ -364,3 +364,20 @@ create policy ext_select on public.extension_requests for select to authenticate
 drop policy if exists ext_update on public.extension_requests;
 create policy ext_update on public.extension_requests for update to authenticated
   using (public.my_level() >= 4) with check (public.my_level() >= 4);
+
+-- ---------------------------------------------------------------------
+-- 12. Nome do perfil também nos dados do login ({{ .Data.name }} nos e-mails)
+-- ---------------------------------------------------------------------
+create or replace function public.sync_profile_name()
+returns trigger language plpgsql security definer set search_path = public, auth as $$
+begin
+  update auth.users
+     set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('name', new.name)
+   where id = new.id
+     and coalesce(raw_user_meta_data->>'name', '') is distinct from new.name;
+  return new;
+end $$;
+revoke execute on function public.sync_profile_name() from public, anon, authenticated;
+drop trigger if exists profiles_sync_name on public.profiles;
+create trigger profiles_sync_name after insert or update of name on public.profiles
+  for each row execute function public.sync_profile_name();
