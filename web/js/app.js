@@ -5,6 +5,8 @@
 // =====================================================================
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, WHATSAPP_NUMBER } from './config.js';
+import { setupMarketing, renderPerformance, renderMonthlyReport, renderClientAccounts, renderIntegrations, showGeneratedReport } from './marketing.js';
+import { initTracking, track, openCookiePreferences, consentStatus } from './tracking.js';
 
 // Lê o endereço ANTES do Supabase limpar, para saber se a pessoa chegou
 // por um link de convite ou de recuperação de senha.
@@ -89,6 +91,11 @@ const ICONS = {
   key: '<path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>',
   trash: '<path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>',
   plus: '<path d="M12 6v12M6 12h12"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8M14 7h7v7"/>',
+  report: '<path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  plug: '<path d="M9 7V3m6 4V3M7 7h10v4a5 5 0 01-10 0V7zm5 9v5"/>',
+  refresh: '<path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>',
   bell: '<path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>',
   extend: '<path d="M12 8v4l3 3M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/>',
   link: '<path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>',
@@ -103,8 +110,10 @@ const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name
 // ---------------------------------------------------------------------
 async function loadLogo() {
   try {
-    const { data } = await sb.from('settings').select('value').eq('key', 'logo_path').maybeSingle();
-    if (data?.value) state.logoUrl = sb.storage.from('marca').getPublicUrl(data.value).data.publicUrl;
+    const { data } = await sb.from('settings').select('key, value');
+    const map = Object.fromEntries((data || []).map((r) => [r.key, r.value]));
+    state.logoUrl = map.logo_path ? sb.storage.from('marca').getPublicUrl(map.logo_path).data.publicUrl : null;
+    state.integrations = Object.fromEntries(Object.entries(map).filter(([k]) => k.startsWith('int_')));
   } catch { /* sem logo personalizado: usa o padrão */ }
   renderLogos();
 }
@@ -141,6 +150,8 @@ async function boot() {
   }
 
   await loadLogo();
+  initTracking(state.integrations || {}, sb);
+  track('PageView');
 
   if (linkError) {
     clearUrlHash();
@@ -194,7 +205,7 @@ async function enterApp() {
   sb.rpc('complete_due_transfers').then(() => {}, () => {});
 
   renderShell();
-  go(window.location.hash.includes('emails') ? 'conta' : 'inicio');
+  go(sectionFromHash());
   show('screen-app');
 }
 
@@ -243,6 +254,7 @@ function bindStaticEvents() {
         return;
       }
       state.session = data.session;
+      track('Login');
       await enterApp();
     });
   });
@@ -302,6 +314,7 @@ function passwordProblem(password, confirm) {
 // ---------------------------------------------------------------------
 const MENU = [
   { id: 'inicio',         label: 'Início',                 icon: 'home',     min: 1 },
+  { id: 'desempenho',     label: 'Desempenho',             icon: 'trend',    min: 1 },
   { id: 'documentos',     label: 'Central de Documentos',  icon: 'doc',      min: 1 },
   { id: 'linha',          label: 'Linha do Tempo',         icon: 'clock',    min: 1 },
   { id: 'relatorios',     label: 'Central de Relatórios',  icon: 'chart',    min: 1 },
@@ -312,7 +325,10 @@ const MENU = [
   { id: 'adm-documentos', label: 'Enviar documentos',      icon: 'upload',   min: 3 },
   { id: 'adm-relatorios', label: 'Gerenciar relatórios',   icon: 'chart',    min: 3 },
   { id: 'adm-servicos',   label: 'Gerenciar serviços',     icon: 'calendar', min: 4 },
+  { id: 'relatorio-mensal', label: 'Relatório mensal',     icon: 'report',   min: 3 },
+  { id: 'contas-clientes', label: 'Contas de anúncio',     icon: 'target',   min: 4 },
   { id: 'marca',          label: 'Configurações da marca', icon: 'brush',    min: 6 },
+  { id: 'integracoes',    label: 'Integrações',            icon: 'plug',     min: 6 },
   { id: 'propriedade',    label: 'Transferir propriedade', icon: 'shield',   min: 6, gold: true },
 ];
 
@@ -342,6 +358,22 @@ function renderShell() {
 
 function goSection(id) { go(id); }
 
+// Abre a seção certa quando o portal é aberto por um link de e-mail (ex.: #relatorios)
+function sectionFromHash() {
+  const h = window.location.hash.replace('#', '');
+  if (h.startsWith('integracoes-google-')) {
+    const st = h.replace('integracoes-google-', '');
+    const msg = { ok: ['Google conectado com sucesso!', 'ok'], cancelado: ['Conexão com o Google cancelada.', 'info'], expirado: ['O pedido de conexão expirou. Tente de novo.', 'error'], erro: ['O Google não autorizou a conexão. Confira o Client ID, o Client Secret e o URI de redirecionamento.', 'error'] }[st];
+    if (msg) setTimeout(() => toast(msg[0], msg[1]), 400);
+    history.replaceState(null, '', window.location.pathname);
+    return 'integracoes';
+  }
+  const map = { emails: 'conta', relatorios: 'relatorios', 'relatorio-mensal': 'relatorio-mensal', desempenho: 'desempenho', solicitacoes: 'solicitacoes', integracoes: 'integracoes' };
+  const target = map[h];
+  const item = MENU.find((m) => m.id === target);
+  return target && item && myLevel() >= item.min ? target : 'inicio';
+}
+
 function go(sectionId) {
   const item = MENU.find((m) => m.id === sectionId);
   if (!item || myLevel() < item.min) { show('screen-denied'); return; }
@@ -351,6 +383,7 @@ function go(sectionId) {
   const content = $('#content');
   content.style.animation = 'none'; void content.offsetHeight; content.style.animation = '';
   (SECTIONS[sectionId] || renderComingSoon)(content, item);
+  track('PageView');
 }
 
 const SECTIONS = {
@@ -366,6 +399,10 @@ const SECTIONS = {
   marca: renderBranding,
   propriedade: renderOwnership,
   solicitacoes: renderRequests,
+  desempenho: renderPerformance,
+  'relatorio-mensal': renderMonthlyReport,
+  'contas-clientes': renderClientAccounts,
+  integracoes: renderIntegrations,
 };
 
 // ---------------------------------------------------------------------
@@ -404,8 +441,11 @@ function renderAccount(el) {
           <input type="checkbox" id="pref-email-updates" class="switch" ${p.email_updates !== false ? 'checked' : ''}>
         </label>
         <p class="muted small" style="margin:12px 0 0">E-mails de segurança e de acesso, como convite, redefinição de senha e avisos de alteração na conta, continuam chegando sempre, para proteger sua conta.</p>
+        ${consentStatus() !== null || Object.values(state.integrations || {}).some(Boolean) ? `<button type="button" class="btn-link" id="btn-cookies" style="padding:0;margin-top:12px">Preferências de cookies</button>` : ''}
       </div>
     </div>`;
+
+  $('#btn-cookies', el)?.addEventListener('click', openCookiePreferences);
 
   $('#pref-email-updates', el).addEventListener('change', async (e) => {
     const enabled = e.target.checked;
@@ -666,6 +706,8 @@ const MAX_FILE_MB = 50;
 
 // Abre um documento/relatório: link externo ou arquivo protegido (link temporário de 5 min).
 async function openItem(item) {
+  if (item.kind === 'gerado') { showGeneratedReport(item); return; }
+  track('ViewContent', { content_name: item.name || item.title || 'Documento' });
   if (item.url) { window.open(item.url, '_blank', 'noopener'); return; }
   const win = window.open('', '_blank');
   const { data, error } = await sb.storage.from('documentos').createSignedUrl(item.storage_path, 300);
@@ -1055,7 +1097,7 @@ async function renderAdminFiles(el, table) {
         <div class="stat-icon ${isDocs ? 'cyan' : 'gold'} sm">${icon(isDocs ? 'doc' : 'chart')}</div>
         <div class="row-main">
           <h4>${esc(isDocs ? x.name : x.title)}</h4>
-          <p>Para: ${esc(clientName(x.client_id))} · ${isDocs ? fmtDate(x.created_at) : fmtDay(x.report_date)} · ${x.url ? 'Link' : 'Arquivo'}</p>
+          <p>Para: ${esc(clientName(x.client_id))} · ${isDocs ? fmtDate(x.created_at) : fmtDay(x.report_date)} · ${x.kind === 'gerado' ? (x.status === 'rascunho' ? 'Rascunho gerado pelo portal' : 'Gerado pelo portal') : x.url ? 'Link' : 'Arquivo'}</p>
         </div>
         <div class="row-actions">
           <button type="button" class="icon-btn cyan" data-open="${i}" title="Abrir" aria-label="Abrir">${icon('link')}</button>
@@ -1379,6 +1421,7 @@ function openExtendModal() {
     await busy(form.querySelector('[type=submit]'), async () => {
       try {
         await callFunction('solicitar-extensao', { months, message, siteUrl: SITE_URL });
+        track('Lead', { content_name: 'Extensão de serviço', months });
         showExtendSuccess(months);
       } catch (err) { toast(err.message, 'error'); }
     });
@@ -1530,7 +1573,18 @@ function openModal(html) {
 function closeModal() {
   $('#modal').classList.add('hidden');
   $('#modal-card').innerHTML = '';
+  $('#modal-card').classList.remove('modal-wide');
 }
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('a[href*="wa.me"]')) track('Contact', { content_name: 'WhatsApp' });
+});
+
+setupMarketing({
+  sb, state, SITE_URL, SUPABASE_URL, $, $$, esc, toast, icon, busy, openModal, closeModal, confirmModal,
+  loadClients, clientName, clientSelect, isStaff, isClient, myLevel, emptyCard, withName,
+  fmtDate, fmtDateTime, fmtDay, callFunction, go, track,
+});
 
 boot().catch((err) => {
   console.error(err);
