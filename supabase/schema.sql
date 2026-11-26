@@ -291,3 +291,42 @@ revoke execute on function public.my_level() from public, anon;
 revoke execute on function public.my_role() from public, anon;
 grant execute on function public.my_level() to authenticated;
 grant execute on function public.my_role() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 9. Documentos e relatórios aceitam arquivo OU link; só clientes recebem
+-- ---------------------------------------------------------------------
+alter table public.documents add column if not exists url text;
+alter table public.documents alter column storage_path drop not null;
+alter table public.documents drop constraint if exists documents_file_or_link;
+alter table public.documents add constraint documents_file_or_link
+  check ((storage_path is not null) or (url is not null and url ~* '^https?://'));
+
+alter table public.reports add column if not exists url text;
+alter table public.reports alter column storage_path drop not null;
+alter table public.reports drop constraint if exists reports_file_or_link;
+alter table public.reports add constraint reports_file_or_link
+  check ((storage_path is not null) or (url is not null and url ~* '^https?://'));
+
+create or replace function public.ensure_client_target()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.profiles where id = new.client_id and role = 'usuario') then
+    raise exception 'Selecione um cliente válido';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.ensure_client_target() from public, anon, authenticated;
+
+drop trigger if exists documents_client_check on public.documents;
+create trigger documents_client_check before insert or update of client_id on public.documents
+  for each row execute function public.ensure_client_target();
+drop trigger if exists reports_client_check on public.reports;
+create trigger reports_client_check before insert or update of client_id on public.reports
+  for each row execute function public.ensure_client_target();
+drop trigger if exists services_client_check on public.services;
+create trigger services_client_check before insert or update of client_id on public.services
+  for each row execute function public.ensure_client_target();
+
+-- Conclusão automática das transferências (pg_cron)
+-- create extension if not exists pg_cron with schema pg_catalog;
+-- select cron.schedule('concluir-transferencias', '*/15 * * * *', 'select public.complete_due_transfers()');

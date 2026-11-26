@@ -4,7 +4,7 @@
 // e-mail, menu por papel e gerenciamento de usuários.
 // =====================================================================
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, WHATSAPP_NUMBER } from './config.js';
 
 // Lê o endereço ANTES do Supabase limpar, para saber se a pessoa chegou
 // por um link de convite ou de recuperação de senha.
@@ -86,6 +86,9 @@ const ICONS = {
   key: '<path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>',
   trash: '<path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>',
   plus: '<path d="M12 6v12M6 12h12"/>',
+  link: '<path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>',
+  download: '<path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>',
+  whatsapp: '<path d="M3 21l1.65-4.95A8.5 8.5 0 1112 20.5a8.4 8.4 0 01-4.05-1.03L3 21z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 01-1.8-1.8l.8-1-1-2L9 9.5z"/>',
   tools: '<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>',
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -336,37 +339,17 @@ function go(sectionId) {
 
 const SECTIONS = {
   inicio: renderHome,
+  documentos: renderDocuments,
+  linha: renderTimeline,
+  relatorios: renderReports,
   conta: renderAccount,
   usuarios: renderUsers,
+  'adm-documentos': (el) => renderAdminFiles(el, 'documents'),
+  'adm-relatorios': (el) => renderAdminFiles(el, 'reports'),
+  'adm-servicos': renderAdminServices,
+  marca: renderBranding,
+  propriedade: renderOwnership,
 };
-
-// ---------------------------------------------------------------------
-// Início
-// ---------------------------------------------------------------------
-function renderHome(el) {
-  const p = state.profile;
-  const name = firstName(p.name);
-  const cards = [
-    { id: 'documentos', icon: 'doc',   color: 'cyan',  title: 'Central de Documentos', text: 'Documentos enviados pela True Elo.' },
-    { id: 'relatorios', icon: 'chart', color: 'gold',  title: 'Central de Relatórios', text: 'Histórico de relatórios do seu projeto.' },
-    { id: 'linha',      icon: 'clock', color: 'green', title: 'Linha do Tempo',        text: 'Andamento do seu contrato.' },
-  ];
-  el.innerHTML = `
-    <div class="page-head">
-      <div>
-        <h1>${name ? `Olá, ${esc(name)}!` : 'Bem-vindo!'}</h1>
-        <p class="muted">Bem-vindo ao seu portal exclusivo. Acompanhe seus projetos e documentos em um só lugar.</p>
-      </div>
-    </div>
-    <div class="grid grid-3">
-      ${cards.map((c) => `
-        <button type="button" class="card quick stat" data-open="${c.id}">
-          <div class="stat-icon ${c.color}">${icon(c.icon)}</div>
-          <div><strong>${esc(c.title)}</strong><span class="muted small">${esc(c.text)}</span></div>
-        </button>`).join('')}
-    </div>`;
-  $$('[data-open]', el).forEach((b) => b.addEventListener('click', () => go(b.dataset.open)));
-}
 
 // ---------------------------------------------------------------------
 // Minha conta (inclui troca de senha com confirmação por e-mail)
@@ -453,6 +436,7 @@ async function loadUsers() {
     .order('name');
   if (error) { toast('Não foi possível carregar os usuários.', 'error'); return; }
   state.users = data || [];
+  state.clients = null; // força recarregar a lista de clientes nas outras telas
   drawUsers();
 }
 
@@ -601,6 +585,658 @@ function openDeleteUser(user) {
       await loadUsers();
     } catch (err) { toast(err.message, 'error'); }
   }));
+}
+
+// ---------------------------------------------------------------------
+// Dados compartilhados (clientes, arquivos, datas)
+// ---------------------------------------------------------------------
+const isStaff = () => myLevel() >= 2;     // Equipe para cima vê todos os clientes
+const isClient = () => state.profile?.role === 'usuario';
+
+async function loadClients(force = false) {
+  if (state.clients && !force) return state.clients;
+  const { data, error } = await sb.from('profiles').select('id, name, email').eq('role', 'usuario').order('name');
+  if (error) throw error;
+  state.clients = data || [];
+  return state.clients;
+}
+const clientName = (id) => state.clients?.find((c) => c.id === id)?.name || 'Cliente removido';
+const clientSelect = (id, { placeholder = 'Selecione um cliente', all = false, selected = '' } = {}) => `
+  <select id="${id}" ${all ? '' : 'required'}>
+    <option value="">${esc(all ? 'Todos os clientes' : placeholder)}</option>
+    ${(state.clients || []).map((c) => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name || c.email)}</option>`).join('')}
+  </select>`;
+
+// Datas "AAAA-MM-DD" (sem fuso) → "DD/MM/AAAA"
+const fmtDay = (d) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—');
+const todayISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const monthsAgoISO = (n) => { const d = new Date(); d.setMonth(d.getMonth() - n); return d.toISOString().slice(0, 10); };
+
+const safeFileName = (name) => name.normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').slice(-80);
+
+const MAX_FILE_MB = 50;
+
+// Abre um documento/relatório: link externo ou arquivo protegido (link temporário de 5 min).
+async function openItem(item) {
+  if (item.url) { window.open(item.url, '_blank', 'noopener'); return; }
+  const win = window.open('', '_blank');
+  const { data, error } = await sb.storage.from('documentos').createSignedUrl(item.storage_path, 300);
+  if (error || !data?.signedUrl) {
+    win?.close();
+    toast('Não foi possível abrir o arquivo. Tente novamente.', 'error');
+    return;
+  }
+  if (win) { win.opener = null; win.location.href = data.signedUrl; } else window.location.href = data.signedUrl;
+}
+
+const whatsappLink = (text) => WHATSAPP_NUMBER
+  ? `https://wa.me/${WHATSAPP_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`
+  : null;
+
+function confirmModal({ title, text, confirmLabel = 'Confirmar', kind = 'danger' }) {
+  return new Promise((resolve) => {
+    openModal(`
+      <h3>${esc(title)}</h3>
+      <p class="muted">${text}</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+        <button type="button" class="btn ${kind === 'danger' ? 'btn-danger' : kind === 'gold' ? 'btn-gold' : 'btn-primary'}" id="btn-confirm-ok">${esc(confirmLabel)}</button>
+      </div>`);
+    let done = false;
+    $('#btn-confirm-ok').addEventListener('click', () => { done = true; closeModal(); resolve(true); });
+    const observer = new MutationObserver(() => {
+      if ($('#modal').classList.contains('hidden')) { observer.disconnect(); if (!done) resolve(false); }
+    });
+    observer.observe($('#modal'), { attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+const loadingCard = () => '<div class="card empty"><div class="spinner" style="margin:0 auto"></div></div>';
+const emptyCard = (iconName, text, extra = '') => `<div class="card empty">${icon(iconName)}<p class="muted"${extra ? '' : ' style="margin:0"'}>${esc(text)}</p>${extra}</div>`;
+const progressOf = (s) => (s ? Math.round((s.completed_months / s.total_months) * 100) : 0);
+
+// ---------------------------------------------------------------------
+// Início (painel)
+// ---------------------------------------------------------------------
+async function renderHome(el) {
+  const p = state.profile;
+  const name = firstName(p.name);
+  el.innerHTML = `
+    <div class="page-head">
+      <div>
+        <h1>${name ? `Olá, ${esc(name)}!` : 'Bem-vindo!'}</h1>
+        <p class="muted">Bem-vindo ao seu portal exclusivo. Acompanhe seus projetos e documentos em um só lugar.</p>
+      </div>
+    </div>
+    <div class="grid grid-3" id="home-stats">
+      ${['cyan', 'gold', 'green'].map((c) => `<div class="card stat"><div class="stat-icon ${c}"></div><div><strong>…</strong></div></div>`).join('')}
+    </div>
+    <div class="card" style="margin-top:18px">
+      <h3>Atividade recente</h3>
+      <div id="home-activity" class="list" style="margin-top:12px"><p class="muted">Carregando…</p></div>
+    </div>`;
+
+  try {
+    const mine = (q) => (isClient() ? q.eq('client_id', p.id) : q);
+    const [docs, reps, svc, recentDocs, recentReps] = await Promise.all([
+      mine(sb.from('documents').select('id', { count: 'exact', head: true })),
+      mine(sb.from('reports').select('id', { count: 'exact', head: true })),
+      isClient()
+        ? sb.from('services').select('*').eq('client_id', p.id).maybeSingle()
+        : sb.from('services').select('client_id', { count: 'exact', head: true }),
+      mine(sb.from('documents').select('id, name, created_at, client_id, url, storage_path').order('created_at', { ascending: false }).limit(5)),
+      mine(sb.from('reports').select('id, title, report_date, created_at, client_id, url, storage_path').order('created_at', { ascending: false }).limit(5)),
+    ]);
+    if (isStaff()) await loadClients();
+
+    const third = isClient()
+      ? { id: 'linha', color: 'green', icon: 'clock', value: `${progressOf(svc.data)}%`, label: 'Progresso do serviço' }
+      : { id: 'linha', color: 'green', icon: 'clock', value: svc.count ?? 0, label: 'Contratos acompanhados' };
+    const stats = [
+      { id: 'documentos', color: 'cyan', icon: 'doc', value: docs.count ?? 0, label: 'Documentos' },
+      { id: 'relatorios', color: 'gold', icon: 'chart', value: reps.count ?? 0, label: 'Relatórios' },
+      third,
+    ];
+    $('#home-stats', el).innerHTML = stats.map((s) => `
+      <button type="button" class="card quick stat" data-open="${s.id}">
+        <div class="stat-icon ${s.color}">${icon(s.icon)}</div>
+        <div><strong style="font-size:1.6rem;line-height:1.1">${esc(s.value)}</strong><span class="muted small">${esc(s.label)}</span></div>
+      </button>`).join('');
+    $$('[data-open]', el).forEach((b) => b.addEventListener('click', () => go(b.dataset.open)));
+
+    const activity = [
+      ...(recentDocs.data || []).map((d) => ({ ...d, kind: 'Documento', title: d.name, when: d.created_at, iconName: 'doc', color: 'cyan' })),
+      ...(recentReps.data || []).map((r) => ({ ...r, kind: 'Relatório', when: r.created_at, iconName: 'chart', color: 'gold' })),
+    ].sort((a, b) => b.when.localeCompare(a.when)).slice(0, 6);
+
+    const box = $('#home-activity', el);
+    if (!activity.length) { box.innerHTML = '<p class="muted center" style="padding:24px 0;margin:0">Nenhuma atividade recente</p>'; return; }
+    box.innerHTML = activity.map((a, i) => `
+      <div class="row activity">
+        <div class="stat-icon ${a.color} sm">${icon(a.iconName)}</div>
+        <div class="row-main">
+          <h4>${esc(a.title)}</h4>
+          <p>${a.kind} adicionado em ${fmtDate(a.when)}${isStaff() ? ' · ' + esc(clientName(a.client_id)) : ''}</p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" data-item="${i}">Abrir</button>
+      </div>`).join('');
+    $$('[data-item]', box).forEach((b) => b.addEventListener('click', () => openItem(activity[+b.dataset.item])));
+  } catch (err) {
+    console.error(err);
+    toast('Não foi possível carregar o painel.', 'error');
+  }
+}
+
+// ---------------------------------------------------------------------
+// Central de Documentos
+// ---------------------------------------------------------------------
+async function renderDocuments(el) {
+  el.innerHTML = `
+    <div class="page-head"><div><h1>Central de Documentos</h1><p class="muted">Aqui você encontra documentos enviados pela True Elo.</p></div></div>
+    <div class="toolbar" id="docs-toolbar"></div>
+    <div id="docs-list" class="grid grid-3">${loadingCard()}</div>`;
+
+  if (isStaff()) {
+    await loadClients().catch(() => {});
+    $('#docs-toolbar', el).innerHTML = clientSelect('docs-client', { all: true });
+    $('#docs-client', el).addEventListener('change', draw);
+  } else $('#docs-toolbar', el).remove();
+
+  let docs = [];
+  const { data, error } = await sb.from('documents').select('*').order('created_at', { ascending: false });
+  if (error) { toast('Não foi possível carregar os documentos.', 'error'); return; }
+  docs = data || [];
+  draw();
+
+  function draw() {
+    const filter = $('#docs-client')?.value;
+    const list = docs.filter((d) => !filter || d.client_id === filter);
+    const box = $('#docs-list', el);
+    if (!list.length) { box.innerHTML = `<div style="grid-column:1/-1">${emptyCard('doc', 'Nenhum documento disponível')}</div>`; return; }
+    box.innerHTML = list.map((d, i) => `
+      <div class="card doc-card">
+        <div class="doc-top">
+          <div class="stat-icon cyan">${icon('doc')}</div>
+          <div class="row-main">
+            <h4 title="${esc(d.name)}">${esc(d.name)}</h4>
+            <p>${fmtDate(d.created_at)}${isStaff() ? ' · ' + esc(clientName(d.client_id)) : ''}</p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" data-i="${i}">${icon(d.url ? 'link' : 'download')} ${d.url ? 'Abrir' : 'Baixar'}</button>
+      </div>`).join('');
+    $$('[data-i]', box).forEach((b) => b.addEventListener('click', () => openItem(list[+b.dataset.i])));
+  }
+}
+
+// ---------------------------------------------------------------------
+// Linha do Tempo do Serviço
+// ---------------------------------------------------------------------
+function timelineDetail(s) {
+  const pct = progressOf(s);
+  const remaining = s.total_months - s.completed_months;
+  return `
+    <div class="grid grid-3 timeline-stats">
+      <div class="center"><strong class="big">${s.total_months}</strong><span class="muted small">Meses totais</span></div>
+      <div class="center"><strong class="big text-gold">${s.completed_months}</strong><span class="muted small">Meses completados</span></div>
+      <div class="center"><strong class="big text-cyan">${remaining}</strong><span class="muted small">Meses restantes</span></div>
+    </div>
+    <div class="progress-label"><span class="muted">Progresso do contrato</span><strong>${pct}%</strong></div>
+    <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="months">
+      ${Array.from({ length: s.total_months }, (_, i) => `<div class="month${i < s.completed_months ? ' done' : ''}" title="Mês ${i + 1}">${i + 1}</div>`).join('')}
+    </div>
+    <p class="muted small" style="margin:14px 0 0">Atualizado em ${fmtDate(s.updated_at)}</p>`;
+}
+
+async function renderTimeline(el) {
+  el.innerHTML = `
+    <div class="page-head"><div><h1>Linha do Tempo do Serviço</h1><p class="muted">Acompanhe o andamento do seu contrato com a True Elo.</p></div></div>
+    <div id="timeline-box">${loadingCard()}</div>`;
+  const box = $('#timeline-box', el);
+
+  if (isClient()) {
+    const { data, error } = await sb.from('services').select('*').eq('client_id', state.profile.id).maybeSingle();
+    if (error) { toast('Não foi possível carregar a linha do tempo.', 'error'); return; }
+    box.innerHTML = data ? `<div class="card">${timelineDetail(data)}</div>` : emptyCard('clock', 'Nenhum serviço em andamento');
+    return;
+  }
+
+  await loadClients().catch(() => {});
+  const { data, error } = await sb.from('services').select('*');
+  if (error) { toast('Não foi possível carregar a linha do tempo.', 'error'); return; }
+  const services = (data || []).sort((a, b) => clientName(a.client_id).localeCompare(clientName(b.client_id), 'pt-BR'));
+  if (!services.length) { box.innerHTML = emptyCard('clock', 'Nenhum serviço cadastrado'); return; }
+  box.innerHTML = `<div class="list">${services.map((s) => `
+    <details class="card service-card">
+      <summary>
+        <div class="row-main"><h4>${esc(clientName(s.client_id))}</h4><p>${s.completed_months}/${s.total_months} meses · ${progressOf(s)}%</p></div>
+        <div class="progress sm"><div class="progress-fill" style="width:${progressOf(s)}%"></div></div>
+      </summary>
+      <div style="margin-top:18px">${timelineDetail(s)}</div>
+    </details>`).join('')}</div>`;
+}
+
+// ---------------------------------------------------------------------
+// Central de Relatórios
+// ---------------------------------------------------------------------
+async function renderReports(el) {
+  el.innerHTML = `
+    <div class="page-head"><div><h1>Central de Relatórios</h1><p class="muted">Histórico de relatórios do seu projeto.</p></div></div>
+    <div class="toolbar">
+      <label class="inline-label">Filtrar por data<input type="month" id="rep-month"></label>
+      <span id="rep-client-wrap"></span>
+      <button type="button" class="btn btn-ghost btn-sm hidden" id="rep-clear" style="align-self:flex-end">Limpar filtro</button>
+    </div>
+    <div id="rep-recent"></div>
+    <div id="rep-list" class="list">${loadingCard()}</div>`;
+
+  if (isStaff()) {
+    await loadClients().catch(() => {});
+    $('#rep-client-wrap', el).innerHTML = `<label class="inline-label">Cliente${clientSelect('rep-client', { all: true })}</label>`;
+    $('#rep-client', el).addEventListener('change', draw);
+  }
+  $('#rep-month', el).addEventListener('change', draw);
+  $('#rep-clear', el).addEventListener('click', () => { $('#rep-month', el).value = ''; draw(); });
+
+  const { data, error } = await sb.from('reports').select('*').order('report_date', { ascending: false });
+  if (error) { toast('Não foi possível carregar os relatórios.', 'error'); return; }
+  const reports = data || [];
+  draw();
+
+  function reportRow(r, i, list) {
+    return `
+      <div class="card row">
+        <div class="stat-icon gold">${icon('chart')}</div>
+        <div class="row-main"><h4>${esc(r.title)}</h4><p>${fmtDay(r.report_date)}${isStaff() ? ' · ' + esc(clientName(r.client_id)) : ''}</p></div>
+        <button type="button" class="btn btn-primary btn-sm" data-list="${list}" data-i="${i}">Visualizar</button>
+      </div>`;
+  }
+
+  function draw() {
+    const month = $('#rep-month', el).value;
+    const client = $('#rep-client')?.value;
+    $('#rep-clear', el).classList.toggle('hidden', !month);
+    let list = reports.filter((r) => !client || r.client_id === client);
+    const recentCut = monthsAgoISO(3);
+    const recent = month ? [] : list.filter((r) => r.report_date >= recentCut).slice(0, 3);
+    if (month) list = list.filter((r) => r.report_date.startsWith(month));
+
+    $('#rep-recent', el).innerHTML = recent.length ? `
+      <h3>Relatórios recentes</h3>
+      <div class="grid grid-3" style="margin-bottom:26px">
+        ${recent.map((r, i) => `
+          <div class="card recent-card">
+            <h4>${esc(r.title)}</h4>
+            <p class="muted small">${fmtDay(r.report_date)}${isStaff() ? ' · ' + esc(clientName(r.client_id)) : ''}</p>
+            <button type="button" class="btn-link" style="align-self:flex-start;padding:0" data-list="recent" data-i="${i}">Ver relatório →</button>
+          </div>`).join('')}
+      </div>
+      <h3>Todos os relatórios</h3>` : '';
+
+    const box = $('#rep-list', el);
+    if (!list.length) {
+      const wa = whatsappLink('Olá! Gostaria de solicitar um relatório do meu projeto.');
+      const extra = isClient()
+        ? (wa
+          ? `<a class="btn btn-gold" href="${wa}" target="_blank" rel="noopener noreferrer">${icon('whatsapp')} Solicitar relatório pelo WhatsApp</a>`
+          : '<p class="muted small" style="margin:0">Fale com a True Elo para solicitar um relatório.</p>')
+        : '';
+      box.innerHTML = emptyCard('chart', month ? 'Nenhum relatório encontrado neste mês' : 'Nenhum relatório encontrado', extra);
+    } else {
+      box.innerHTML = list.map((r, i) => reportRow(r, i, 'all')).join('');
+    }
+    $$('[data-list]', el).forEach((b) => b.addEventListener('click', () => {
+      const src = b.dataset.list === 'recent' ? recent : list;
+      openItem(src[+b.dataset.i]);
+    }));
+  }
+}
+
+// ---------------------------------------------------------------------
+// Administração: Enviar documentos / Gerenciar relatórios
+// ---------------------------------------------------------------------
+async function renderAdminFiles(el, table) {
+  const isDocs = table === 'documents';
+  const T = isDocs
+    ? { title: 'Enviar documentos', sub: 'Envie documentos para seus clientes.', nameLabel: 'Nome do documento', namePh: 'Ex.: Contrato de serviço', btn: 'Enviar documento', listTitle: 'Documentos enviados', empty: 'Nenhum documento enviado', ok: 'Documento enviado!', folder: '' }
+    : { title: 'Gerenciar relatórios', sub: 'Adicione relatórios para seus clientes.', nameLabel: 'Título do relatório', namePh: 'Ex.: Relatório Mensal — Janeiro de 2026', btn: 'Adicionar relatório', listTitle: 'Relatórios cadastrados', empty: 'Nenhum relatório cadastrado', ok: 'Relatório adicionado!', folder: 'relatorios/' };
+
+  await loadClients(true).catch(() => toast('Não foi possível carregar os clientes.', 'error'));
+
+  el.innerHTML = `
+    <div class="page-head"><div><h1>${T.title}</h1><p class="muted">${T.sub}</p></div></div>
+    <form class="card form" id="file-form" novalidate style="margin-bottom:28px">
+      <label>Selecionar cliente${clientSelect('ff-client')}</label>
+      <div class="grid ${isDocs ? '' : 'grid-2'}" style="gap:16px">
+        <label>${T.nameLabel}<input id="ff-name" required placeholder="${esc(T.namePh)}"></label>
+        ${isDocs ? '' : `<label>Data do relatório<input type="date" id="ff-date" required value="${todayISO()}"></label>`}
+      </div>
+      <div>
+        <div class="tabs" role="tablist" style="max-width:420px;margin-bottom:12px">
+          <button type="button" class="tab active" data-src="file">Enviar arquivo</button>
+          <button type="button" class="tab" data-src="link">Colar link</button>
+        </div>
+        <label data-panel="file">Arquivo (PDF, imagem, planilha… até ${MAX_FILE_MB} MB)<input type="file" id="ff-file"></label>
+        <label data-panel="link" class="hidden">Link do ${isDocs ? 'documento' : 'relatório'} (Google Drive, Canva, etc.)<input type="url" id="ff-url" placeholder="https://..."></label>
+      </div>
+      <div><button type="submit" class="btn btn-primary">${icon('upload')} ${T.btn}</button></div>
+    </form>
+    <div class="page-head" style="margin-bottom:14px">
+      <h3 style="margin:0">${T.listTitle}</h3>
+      ${clientSelect('ff-filter', { all: true })}
+    </div>
+    <div id="ff-list" class="list">${loadingCard()}</div>`;
+
+  if (!state.clients?.length) {
+    $('#file-form', el).insertAdjacentHTML('afterbegin', '<div class="notice gold">Nenhum cliente cadastrado ainda. Cadastre clientes (função "Usuário") em Gerenciar usuários.</div>');
+  }
+
+  let source = 'file';
+  $$('#file-form .tab', el).forEach((t) => t.addEventListener('click', () => {
+    source = t.dataset.src;
+    $$('#file-form .tab', el).forEach((x) => x.classList.toggle('active', x === t));
+    $$('#file-form [data-panel]', el).forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== source));
+  }));
+
+  let items = [];
+  async function load() {
+    const { data, error } = await sb.from(table).select('*').order(isDocs ? 'created_at' : 'report_date', { ascending: false });
+    if (error) { toast('Não foi possível carregar a lista.', 'error'); return; }
+    items = data || [];
+    draw();
+  }
+
+  function draw() {
+    const filter = $('#ff-filter', el).value;
+    const list = items.filter((x) => !filter || x.client_id === filter);
+    const box = $('#ff-list', el);
+    if (!list.length) { box.innerHTML = emptyCard(isDocs ? 'doc' : 'chart', T.empty); return; }
+    box.innerHTML = list.map((x, i) => `
+      <div class="card row">
+        <div class="stat-icon ${isDocs ? 'cyan' : 'gold'} sm">${icon(isDocs ? 'doc' : 'chart')}</div>
+        <div class="row-main">
+          <h4>${esc(isDocs ? x.name : x.title)}</h4>
+          <p>Para: ${esc(clientName(x.client_id))} · ${isDocs ? fmtDate(x.created_at) : fmtDay(x.report_date)} · ${x.url ? 'Link' : 'Arquivo'}</p>
+        </div>
+        <div class="row-actions">
+          <button type="button" class="icon-btn cyan" data-open="${i}" title="Abrir" aria-label="Abrir">${icon('link')}</button>
+          <button type="button" class="icon-btn red" data-del="${i}" title="Excluir" aria-label="Excluir">${icon('trash')}</button>
+        </div>
+      </div>`).join('');
+    $$('[data-open]', box).forEach((b) => b.addEventListener('click', () => openItem(list[+b.dataset.open])));
+    $$('[data-del]', box).forEach((b) => b.addEventListener('click', async () => {
+      const x = list[+b.dataset.del];
+      const ok = await confirmModal({
+        title: isDocs ? 'Excluir documento?' : 'Excluir relatório?',
+        text: `<strong>${esc(isDocs ? x.name : x.title)}</strong> deixará de aparecer para o cliente. Esta ação não pode ser desfeita.`,
+        confirmLabel: 'Excluir',
+      });
+      if (!ok) return;
+      const { error } = await sb.from(table).delete().eq('id', x.id);
+      if (error) { toast('Não foi possível excluir.', 'error'); return; }
+      if (x.storage_path) await sb.storage.from('documentos').remove([x.storage_path]);
+      toast('Excluído.');
+      load();
+    }));
+  }
+
+  $('#ff-filter', el).addEventListener('change', draw);
+
+  $('#file-form', el).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const clientId = $('#ff-client', el).value;
+    const name = $('#ff-name', el).value.trim();
+    const date = isDocs ? null : $('#ff-date', el).value;
+    const file = $('#ff-file', el).files[0];
+    const url = $('#ff-url', el).value.trim();
+
+    if (!clientId) { toast('Selecione um cliente.', 'error'); return; }
+    if (name.length < 2) { toast(`Informe o ${isDocs ? 'nome do documento' : 'título do relatório'}.`, 'error'); return; }
+    if (!isDocs && !date) { toast('Informe a data do relatório.', 'error'); return; }
+    if (source === 'file' && !file) { toast('Escolha o arquivo.', 'error'); return; }
+    if (source === 'file' && file.size > MAX_FILE_MB * 1024 * 1024) { toast(`Arquivo muito grande. Máximo ${MAX_FILE_MB} MB.`, 'error'); return; }
+    if (source === 'link' && !/^https?:\/\/\S+$/i.test(url)) { toast('Cole um link válido, começando com https://', 'error'); return; }
+
+    await busy(e.submitter || $('#file-form button[type=submit]', el), async () => {
+      let storagePath = null;
+      if (source === 'file') {
+        storagePath = `${clientId}/${T.folder}${crypto.randomUUID()}-${safeFileName(file.name)}`;
+        const { error: upErr } = await sb.storage.from('documentos').upload(storagePath, file, { contentType: file.type || undefined, upsert: false });
+        if (upErr) { console.error(upErr); toast('Não foi possível enviar o arquivo.', 'error'); return; }
+      }
+      const row = isDocs
+        ? { client_id: clientId, name, storage_path: storagePath, url: source === 'link' ? url : null, uploaded_by: state.profile.id }
+        : { client_id: clientId, title: name, report_date: date, storage_path: storagePath, url: source === 'link' ? url : null, uploaded_by: state.profile.id };
+      const { error } = await sb.from(table).insert(row);
+      if (error) {
+        console.error(error);
+        if (storagePath) await sb.storage.from('documentos').remove([storagePath]);
+        toast('Não foi possível salvar. Tente novamente.', 'error');
+        return;
+      }
+      toast(T.ok);
+      $('#ff-name', el).value = '';
+      $('#ff-file', el).value = '';
+      $('#ff-url', el).value = '';
+      load();
+    });
+  });
+
+  load();
+}
+
+// ---------------------------------------------------------------------
+// Administração: Gerenciar serviços (linha do tempo)
+// ---------------------------------------------------------------------
+async function renderAdminServices(el) {
+  await loadClients(true).catch(() => toast('Não foi possível carregar os clientes.', 'error'));
+  el.innerHTML = `
+    <div class="page-head"><div><h1>Gerenciar serviços</h1><p class="muted">Configure a linha do tempo dos contratos dos clientes.</p></div></div>
+    <form class="card form" id="svc-form" novalidate style="margin-bottom:28px">
+      <label>Selecionar cliente${clientSelect('svc-client')}</label>
+      <div class="grid grid-2" style="gap:16px">
+        <label>Total de meses do contrato<input type="number" id="svc-total" min="1" max="120" placeholder="12" required></label>
+        <label>Meses completados<input type="number" id="svc-done" min="0" max="120" placeholder="3" required></label>
+      </div>
+      <p class="muted small" style="margin:0" id="svc-hint">Se o cliente já tiver um serviço, os números serão atualizados.</p>
+      <div><button type="submit" class="btn btn-primary">Salvar serviço</button></div>
+    </form>
+    <h3>Serviços cadastrados</h3>
+    <div id="svc-list" class="list">${loadingCard()}</div>`;
+
+  let services = [];
+  async function load() {
+    const { data, error } = await sb.from('services').select('*');
+    if (error) { toast('Não foi possível carregar os serviços.', 'error'); return; }
+    services = (data || []).sort((a, b) => clientName(a.client_id).localeCompare(clientName(b.client_id), 'pt-BR'));
+    draw();
+  }
+
+  function draw() {
+    const box = $('#svc-list', el);
+    if (!services.length) { box.innerHTML = emptyCard('calendar', 'Nenhum serviço cadastrado'); return; }
+    box.innerHTML = services.map((s, i) => `
+      <div class="card">
+        <div class="row" style="padding:0;margin-bottom:12px">
+          <div class="row-main"><h4>${esc(clientName(s.client_id))}</h4><p>${s.completed_months}/${s.total_months} meses · ${progressOf(s)}%</p></div>
+          <div class="row-actions" style="border:0;padding:0;width:auto">
+            <button type="button" class="icon-btn cyan" data-edit="${i}" title="Editar" aria-label="Editar">${icon('edit')}</button>
+            <button type="button" class="icon-btn red" data-del="${i}" title="Excluir" aria-label="Excluir">${icon('trash')}</button>
+          </div>
+        </div>
+        <div class="progress sm"><div class="progress-fill" style="width:${progressOf(s)}%"></div></div>
+      </div>`).join('');
+    $$('[data-edit]', box).forEach((b) => b.addEventListener('click', () => {
+      const s = services[+b.dataset.edit];
+      $('#svc-client', el).value = s.client_id;
+      fill();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      $('#svc-done', el).focus();
+    }));
+    $$('[data-del]', box).forEach((b) => b.addEventListener('click', async () => {
+      const s = services[+b.dataset.del];
+      const ok = await confirmModal({ title: 'Excluir serviço?', text: `A linha do tempo de <strong>${esc(clientName(s.client_id))}</strong> será apagada.`, confirmLabel: 'Excluir' });
+      if (!ok) return;
+      const { error } = await sb.from('services').delete().eq('client_id', s.client_id);
+      if (error) { toast('Não foi possível excluir.', 'error'); return; }
+      toast('Serviço excluído.');
+      load();
+    }));
+  }
+
+  function fill() {
+    const s = services.find((x) => x.client_id === $('#svc-client', el).value);
+    $('#svc-total', el).value = s ? s.total_months : '';
+    $('#svc-done', el).value = s ? s.completed_months : '';
+    $('#svc-hint', el).textContent = s ? 'Este cliente já tem um serviço. Altere os números e salve.' : 'Novo serviço para este cliente.';
+  }
+  $('#svc-client', el).addEventListener('change', fill);
+
+  $('#svc-form', el).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const client_id = $('#svc-client', el).value;
+    const total = parseInt($('#svc-total', el).value, 10);
+    const done = parseInt($('#svc-done', el).value, 10);
+    if (!client_id) { toast('Selecione um cliente.', 'error'); return; }
+    if (!(total >= 1)) { toast('Informe o total de meses.', 'error'); return; }
+    if (!(done >= 0)) { toast('Informe os meses completados.', 'error'); return; }
+    if (done > total) { toast('Meses completados não pode ser maior que o total.', 'error'); return; }
+    await busy(e.submitter || $('#svc-form button[type=submit]', el), async () => {
+      const { error } = await sb.from('services').upsert(
+        { client_id, total_months: total, completed_months: done, updated_at: new Date().toISOString() },
+        { onConflict: 'client_id' });
+      if (error) { console.error(error); toast('Não foi possível salvar o serviço.', 'error'); return; }
+      toast('Serviço salvo!');
+      $('#svc-form', el).reset();
+      load();
+    });
+  });
+
+  load();
+}
+
+// ---------------------------------------------------------------------
+// Configurações da marca (logo) — somente Proprietário
+// ---------------------------------------------------------------------
+async function renderBranding(el) {
+  el.innerHTML = `
+    <div class="page-head"><div><h1>Configurações da marca</h1><p class="muted">Personalize a identidade visual do portal.</p></div></div>
+    <div class="card">
+      <h3>Logo do portal</h3>
+      <p class="muted small">O logo aparece na tela de entrada, no menu lateral e no topo do celular.</p>
+      <div class="logo-preview"><div class="brand brand-lg" data-logo style="margin:0"></div></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="btn btn-primary" style="cursor:pointer">${icon('upload')} <span>${state.logoUrl ? 'Alterar logo' : 'Inserir logo'}</span>
+          <input type="file" id="logo-input" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml" class="hidden">
+        </label>
+        ${state.logoUrl ? '<button type="button" class="btn btn-ghost" id="logo-remove" style="color:var(--danger)">Remover logo</button>' : ''}
+      </div>
+      <p class="muted small" style="margin:14px 0 0">Formatos aceitos: PNG, SVG, JPG. Tamanho máximo: 2 MB. Sem logo inserido, o portal usa o logo padrão da True Elo.</p>
+    </div>`;
+  renderLogos();
+
+  $('#logo-input', el).addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/svg+xml'].includes(file.type)) { toast('Formato inválido. Use PNG, SVG ou JPG.', 'error'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast('Arquivo muito grande. Máximo 2 MB.', 'error'); return; }
+    const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/svg+xml': 'svg' }[file.type];
+    const path = `logo-${Date.now()}.${ext}`;
+    const old = await sb.from('settings').select('value').eq('key', 'logo_path').maybeSingle();
+    const { error: upErr } = await sb.storage.from('marca').upload(path, file, { contentType: file.type });
+    if (upErr) { console.error(upErr); toast('Não foi possível enviar o logo.', 'error'); return; }
+    const { error } = await sb.from('settings').upsert({ key: 'logo_path', value: path, updated_at: new Date().toISOString() });
+    if (error) { toast('Não foi possível salvar o logo.', 'error'); return; }
+    if (old.data?.value) await sb.storage.from('marca').remove([old.data.value]);
+    toast(state.logoUrl ? 'Logo atualizado!' : 'Logo inserido!');
+    await loadLogo();
+    renderBranding(el);
+  });
+
+  $('#logo-remove', el)?.addEventListener('click', async () => {
+    const ok = await confirmModal({ title: 'Remover logo?', text: 'O portal voltará a usar o logo padrão da True Elo.', confirmLabel: 'Remover' });
+    if (!ok) return;
+    const { data } = await sb.from('settings').select('value').eq('key', 'logo_path').maybeSingle();
+    const { error } = await sb.from('settings').delete().eq('key', 'logo_path');
+    if (error) { toast('Não foi possível remover o logo.', 'error'); return; }
+    if (data?.value) await sb.storage.from('marca').remove([data.value]);
+    state.logoUrl = null;
+    toast('Logo removido.');
+    renderLogos();
+    renderBranding(el);
+  });
+}
+
+// ---------------------------------------------------------------------
+// Transferir propriedade — somente Proprietário
+// ---------------------------------------------------------------------
+async function renderOwnership(el) {
+  el.innerHTML = `
+    <div class="page-head"><div><h1>Transferir propriedade</h1><p class="muted">Transfira a propriedade do portal para outro administrador.</p></div></div>
+    <div id="own-box">${loadingCard()}</div>`;
+  const box = $('#own-box', el);
+
+  const [{ data: pending }, { data: admins }] = await Promise.all([
+    sb.from('ownership_transfers').select('*').eq('status', 'pendente').maybeSingle(),
+    sb.from('profiles').select('id, name, email').eq('role', 'administrador').order('name'),
+  ]);
+  const nameOf = (id) => (admins || []).find((a) => a.id === id)?.name || 'Administrador';
+
+  if (pending) {
+    const ms = new Date(pending.completes_at) - Date.now();
+    const days = Math.floor(ms / 86400000);
+    const hours = Math.floor((ms % 86400000) / 3600000);
+    const left = ms <= 0 ? 'concluindo nos próximos minutos' : `${days > 0 ? `${days} dia${days > 1 ? 's' : ''} e ` : ''}${hours} hora${hours === 1 ? '' : 's'}`;
+    box.innerHTML = `
+      <div class="card">
+        <div class="notice gold" style="margin-bottom:18px">
+          <strong>Transferência em andamento</strong><br>
+          Para: <strong>${esc(nameOf(pending.to_user))}</strong><br>
+          Conclusão em ${fmtDateTime(pending.completes_at)} · Tempo restante: ${left}
+        </div>
+        <p class="muted">Até lá, você continua como Administrador Proprietário e pode cancelar a transferência.</p>
+        <button type="button" class="btn btn-ghost" id="own-cancel" style="color:var(--danger)">Cancelar transferência</button>
+      </div>`;
+    $('#own-cancel', el).addEventListener('click', async () => {
+      const ok = await confirmModal({ title: 'Cancelar transferência?', text: 'Você continuará como Administrador Proprietário.', confirmLabel: 'Cancelar transferência', kind: 'primary' });
+      if (!ok) return;
+      const { error } = await sb.rpc('cancel_ownership_transfer');
+      if (error) { toast('Não foi possível cancelar.', 'error'); return; }
+      toast('Transferência cancelada.');
+      renderOwnership(el);
+    });
+    return;
+  }
+
+  box.innerHTML = `
+    <form class="card form" id="own-form" novalidate>
+      <label>Selecionar novo proprietário
+        <select id="own-user" required>
+          <option value="">Selecione um administrador</option>
+          ${(admins || []).map((a) => `<option value="${a.id}">${esc(a.name || a.email)}</option>`).join('')}
+        </select>
+      </label>
+      ${(admins || []).length ? '' : '<p class="muted small" style="margin:0">Nenhum administrador cadastrado. Primeiro cadastre a pessoa em Gerenciar usuários com a função "Administrador".</p>'}
+      <div class="notice red"><strong>Atenção:</strong> após iniciar a transferência, haverá um período de 3 dias para conclusão. Você se tornará um Administrador comum e o novo proprietário poderá remover seu acesso.</div>
+      <div><button type="submit" class="btn btn-gold">${icon('shield')} Transferir propriedade</button></div>
+    </form>`;
+
+  $('#own-form', el).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target = $('#own-user', el).value;
+    if (!target) { toast('Selecione um administrador.', 'error'); return; }
+    const ok = await confirmModal({
+      title: 'Iniciar transferência?',
+      text: `Em 3 dias, <strong>${esc(nameOf(target))}</strong> se tornará o Administrador Proprietário e você passará a Administrador. Você pode cancelar até lá.`,
+      confirmLabel: 'Iniciar transferência', kind: 'gold',
+    });
+    if (!ok) return;
+    const { error } = await sb.rpc('start_ownership_transfer', { target });
+    if (error) { toast(error.message || 'Não foi possível iniciar a transferência.', 'error'); return; }
+    toast('Transferência iniciada! Conclusão em 3 dias.');
+    renderOwnership(el);
+  });
 }
 
 // ---------------------------------------------------------------------
