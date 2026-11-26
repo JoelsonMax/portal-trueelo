@@ -381,3 +381,18 @@ revoke execute on function public.sync_profile_name() from public, anon, authent
 drop trigger if exists profiles_sync_name on public.profiles;
 create trigger profiles_sync_name after insert or update of name on public.profiles
   for each row execute function public.sync_profile_name();
+
+-- ---------------------------------------------------------------------
+-- 13. Preferência de e-mails informativos
+-- ---------------------------------------------------------------------
+alter table public.profiles add column if not exists email_updates boolean not null default true;
+alter table public.profiles add column if not exists email_updates_changed_at timestamptz;
+create or replace function public.set_email_updates(enabled boolean)
+returns void language sql security definer set search_path = public as $$
+  update public.profiles set email_updates = enabled, email_updates_changed_at = now() where id = auth.uid()
+$$;
+revoke execute on function public.set_email_updates(boolean) from public, anon;
+grant execute on function public.set_email_updates(boolean) to authenticated;
+
+-- 14. Marketing (integrações, contas dos clientes, métricas, relatórios gerados, agendamentos):
+--     ver supabase/migrations/13_marketing.sql

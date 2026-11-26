@@ -183,7 +183,7 @@ function showPasswordScreen(mode) {
 async function enterApp() {
   const { data: profile, error } = await sb
     .from('profiles')
-    .select('id, name, email, phone, role, created_at, last_login')
+    .select('id, name, email, phone, role, created_at, last_login, email_updates')
     .eq('id', state.session.user.id)
     .single();
 
@@ -194,7 +194,7 @@ async function enterApp() {
   sb.rpc('complete_due_transfers').then(() => {}, () => {});
 
   renderShell();
-  go('inicio');
+  go(window.location.hash.includes('emails') ? 'conta' : 'inicio');
   show('screen-app');
 }
 
@@ -394,7 +394,33 @@ function renderAccount(el) {
         <p class="muted">Por segurança, enviamos um link de confirmação para <strong>${esc(p.email)}</strong>. Abra o e-mail e escolha a nova senha.</p>
         <button type="button" class="btn btn-primary" id="btn-change-password">${icon('key')} Enviar link de confirmação</button>
       </div>
+      <div class="card" id="email-prefs">
+        <h3>Preferências de e-mail</h3>
+        <label class="switch-row">
+          <span>
+            <strong>Receber e-mails informativos</strong>
+            <span class="muted small">Relatórios mensais, novidades e lembretes da True Elo.</span>
+          </span>
+          <input type="checkbox" id="pref-email-updates" class="switch" ${p.email_updates !== false ? 'checked' : ''}>
+        </label>
+        <p class="muted small" style="margin:12px 0 0">E-mails de segurança e de acesso, como convite, redefinição de senha e avisos de alteração na conta, continuam chegando sempre, para proteger sua conta.</p>
+      </div>
     </div>`;
+
+  $('#pref-email-updates', el).addEventListener('change', async (e) => {
+    const enabled = e.target.checked;
+    e.target.disabled = true;
+    const { error } = await sb.rpc('set_email_updates', { enabled });
+    e.target.disabled = false;
+    if (error) { e.target.checked = !enabled; toast('Não foi possível salvar sua preferência.', 'error'); return; }
+    state.profile.email_updates = enabled;
+    toast(enabled ? 'Pronto! Você voltará a receber os e-mails informativos.' : 'Pronto! Você não receberá mais e-mails informativos.');
+  });
+
+  if (location.hash.includes('emails')) {
+    $('#email-prefs', el).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('#email-prefs', el).classList.add('highlight');
+  }
 
   $('#btn-change-password', el).addEventListener('click', (e) => busy(e.currentTarget, async () => {
     const { error } = await sb.auth.resetPasswordForEmail(p.email, { redirectTo: SITE_URL });
