@@ -654,7 +654,37 @@ function confirmModal({ title, text, confirmLabel = 'Confirmar', kind = 'danger'
 
 const loadingCard = () => '<div class="card empty"><div class="spinner" style="margin:0 auto"></div></div>';
 const emptyCard = (iconName, text, extra = '') => `<div class="card empty">${icon(iconName)}<p class="muted"${extra ? '' : ' style="margin:0"'}>${esc(text)}</p>${extra}</div>`;
-const progressOf = (s) => (s ? Math.round((s.completed_months / s.total_months) * 100) : 0);
+// Linha do tempo automática: tudo é calculado a partir da data de início e da duração.
+const addMonthsISO = (iso, n) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const last = new Date(y, m - 1 + n + 1, 0).getDate();              // último dia do mês de destino
+  const dt = new Date(y, m - 1 + n, Math.min(d, last));
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+};
+function serviceStatus(s) {
+  if (!s) return null;
+  const today = todayISO();
+  let done = 0;
+  while (done < s.total_months && addMonthsISO(s.start_date, done + 1) <= today) done++;
+  const started = s.start_date <= today;
+  const finished = done >= s.total_months;
+  return {
+    done,
+    remaining: s.total_months - done,
+    current: started && !finished ? done + 1 : null,                 // mês em andamento (1, 2, 3…)
+    pct: Math.round((done / s.total_months) * 100),
+    started, finished,
+    end: addMonthsISO(s.start_date, s.total_months),
+    nextTurn: finished ? null : addMonthsISO(s.start_date, done + 1),
+  };
+}
+const progressOf = (s) => serviceStatus(s)?.pct ?? 0;
+const statusLine = (s) => {
+  const st = serviceStatus(s);
+  if (!st.started) return `Começa em ${fmtDay(s.start_date)} · ${s.total_months} meses`;
+  if (st.finished) return `Contrato concluído em ${fmtDay(st.end)} · ${s.total_months} meses`;
+  return `Mês ${st.current} de ${s.total_months} · ${st.done} completo${st.done === 1 ? '' : 's'} · término em ${fmtDay(st.end)}`;
+};
 
 // ---------------------------------------------------------------------
 // Início (painel)
@@ -773,20 +803,27 @@ async function renderDocuments(el) {
 // Linha do Tempo do Serviço
 // ---------------------------------------------------------------------
 function timelineDetail(s) {
-  const pct = progressOf(s);
-  const remaining = s.total_months - s.completed_months;
+  const st = serviceStatus(s);
+  const badge = !st.started ? '<span class="badge">Ainda não começou</span>'
+    : st.finished ? '<span class="badge owner">Contrato concluído</span>'
+    : `<span class="badge admin">Mês ${st.current} em andamento</span>`;
   return `
+    <div class="timeline-head">${badge}<span class="muted small">Início: <strong>${fmtDay(s.start_date)}</strong> · Término: <strong>${fmtDay(st.end)}</strong></span></div>
     <div class="grid grid-3 timeline-stats">
       <div class="center"><strong class="big">${s.total_months}</strong><span class="muted small">Meses totais</span></div>
-      <div class="center"><strong class="big text-gold">${s.completed_months}</strong><span class="muted small">Meses completados</span></div>
-      <div class="center"><strong class="big text-cyan">${remaining}</strong><span class="muted small">Meses restantes</span></div>
+      <div class="center"><strong class="big text-gold">${st.done}</strong><span class="muted small">Meses completados</span></div>
+      <div class="center"><strong class="big text-cyan">${st.remaining}</strong><span class="muted small">Meses restantes</span></div>
     </div>
-    <div class="progress-label"><span class="muted">Progresso do contrato</span><strong>${pct}%</strong></div>
-    <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="progress-label"><span class="muted">Progresso do contrato</span><strong>${st.pct}%</strong></div>
+    <div class="progress"><div class="progress-fill" style="width:${st.pct}%"></div></div>
     <div class="months">
-      ${Array.from({ length: s.total_months }, (_, i) => `<div class="month${i < s.completed_months ? ' done' : ''}" title="Mês ${i + 1}">${i + 1}</div>`).join('')}
+      ${Array.from({ length: s.total_months }, (_, i) => {
+        const cls = i < st.done ? ' done' : (st.current === i + 1 ? ' current' : '');
+        const from = addMonthsISO(s.start_date, i);
+        return `<div class="month${cls}" title="Mês ${i + 1}: a partir de ${fmtDay(from)}">${i + 1}</div>`;
+      }).join('')}
     </div>
-    <p class="muted small" style="margin:14px 0 0">Atualizado em ${fmtDate(s.updated_at)}</p>`;
+    <p class="muted small" style="margin:14px 0 0">${st.nextTurn ? `O próximo mês se completa em ${fmtDay(st.nextTurn)}. ` : ''}Atualizado automaticamente todos os dias.</p>`;
 }
 
 async function renderTimeline(el) {
@@ -810,7 +847,7 @@ async function renderTimeline(el) {
   box.innerHTML = `<div class="list">${services.map((s) => `
     <details class="card service-card">
       <summary>
-        <div class="row-main"><h4>${esc(clientName(s.client_id))}</h4><p>${s.completed_months}/${s.total_months} meses · ${progressOf(s)}%</p></div>
+        <div class="row-main"><h4>${esc(clientName(s.client_id))}</h4><p>${statusLine(s)} · ${progressOf(s)}%</p></div>
         <div class="progress sm"><div class="progress-fill" style="width:${progressOf(s)}%"></div></div>
       </summary>
       <div style="margin-top:18px">${timelineDetail(s)}</div>
@@ -1036,10 +1073,10 @@ async function renderAdminServices(el) {
     <form class="card form" id="svc-form" novalidate style="margin-bottom:28px">
       <label>Selecionar cliente${clientSelect('svc-client')}</label>
       <div class="grid grid-2" style="gap:16px">
-        <label>Total de meses do contrato<input type="number" id="svc-total" min="1" max="120" placeholder="12" required></label>
-        <label>Meses completados<input type="number" id="svc-done" min="0" max="120" placeholder="3" required></label>
+        <label>Data de início do contrato (dia em que o cliente fechou)<input type="date" id="svc-start" required></label>
+        <label>Duração do contrato (em meses)<input type="number" id="svc-total" min="1" max="120" placeholder="12" required></label>
       </div>
-      <p class="muted small" style="margin:0" id="svc-hint">Se o cliente já tiver um serviço, os números serão atualizados.</p>
+      <p class="muted small" style="margin:0" id="svc-hint">Os meses completados são calculados automaticamente a partir da data de início.</p>
       <div><button type="submit" class="btn btn-primary">Salvar serviço</button></div>
     </form>
     <h3>Serviços cadastrados</h3>
@@ -1059,7 +1096,7 @@ async function renderAdminServices(el) {
     box.innerHTML = services.map((s, i) => `
       <div class="card">
         <div class="row" style="padding:0;margin-bottom:12px">
-          <div class="row-main"><h4>${esc(clientName(s.client_id))}</h4><p>${s.completed_months}/${s.total_months} meses · ${progressOf(s)}%</p></div>
+          <div class="row-main"><h4>${esc(clientName(s.client_id))}</h4><p>${statusLine(s)} · ${progressOf(s)}%</p></div>
           <div class="row-actions" style="border:0;padding:0;width:auto">
             <button type="button" class="icon-btn cyan" data-edit="${i}" title="Editar" aria-label="Editar">${icon('edit')}</button>
             <button type="button" class="icon-btn red" data-del="${i}" title="Excluir" aria-label="Excluir">${icon('trash')}</button>
@@ -1072,7 +1109,7 @@ async function renderAdminServices(el) {
       $('#svc-client', el).value = s.client_id;
       fill();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      $('#svc-done', el).focus();
+      $('#svc-start', el).focus();
     }));
     $$('[data-del]', box).forEach((b) => b.addEventListener('click', async () => {
       const s = services[+b.dataset.del];
@@ -1088,8 +1125,10 @@ async function renderAdminServices(el) {
   function fill() {
     const s = services.find((x) => x.client_id === $('#svc-client', el).value);
     $('#svc-total', el).value = s ? s.total_months : '';
-    $('#svc-done', el).value = s ? s.completed_months : '';
-    $('#svc-hint', el).textContent = s ? 'Este cliente já tem um serviço. Altere os números e salve.' : 'Novo serviço para este cliente.';
+    $('#svc-start', el).value = s ? s.start_date : '';
+    $('#svc-hint', el).textContent = s
+      ? `Este cliente já tem um contrato (${statusLine(s)}). Altere e salve.`
+      : 'Os meses completados são calculados automaticamente a partir da data de início.';
   }
   $('#svc-client', el).addEventListener('change', fill);
 
@@ -1097,14 +1136,14 @@ async function renderAdminServices(el) {
     e.preventDefault();
     const client_id = $('#svc-client', el).value;
     const total = parseInt($('#svc-total', el).value, 10);
-    const done = parseInt($('#svc-done', el).value, 10);
+    const start = $('#svc-start', el).value;
     if (!client_id) { toast('Selecione um cliente.', 'error'); return; }
     if (!(total >= 1)) { toast('Informe o total de meses.', 'error'); return; }
-    if (!(done >= 0)) { toast('Informe os meses completados.', 'error'); return; }
-    if (done > total) { toast('Meses completados não pode ser maior que o total.', 'error'); return; }
+    if (total > 120) { toast('A duração máxima é de 120 meses.', 'error'); return; }
+    if (!start) { toast('Informe a data de início do contrato.', 'error'); return; }
     await busy(e.submitter || $('#svc-form button[type=submit]', el), async () => {
       const { error } = await sb.from('services').upsert(
-        { client_id, total_months: total, completed_months: done, updated_at: new Date().toISOString() },
+        { client_id, total_months: total, start_date: start, updated_at: new Date().toISOString() },
         { onConflict: 'client_id' });
       if (error) { console.error(error); toast('Não foi possível salvar o serviço.', 'error'); return; }
       toast('Serviço salvo!');

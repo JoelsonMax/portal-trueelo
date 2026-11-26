@@ -330,3 +330,13 @@ create trigger services_client_check before insert or update of client_id on pub
 -- Conclusão automática das transferências (pg_cron)
 -- create extension if not exists pg_cron with schema pg_catalog;
 -- select cron.schedule('concluir-transferencias', '*/15 * * * *', 'select public.complete_due_transfers()');
+
+-- ---------------------------------------------------------------------
+-- 10. Linha do tempo automática: calculada pela data de início
+-- ---------------------------------------------------------------------
+alter table public.services drop constraint if exists services_check;
+alter table public.services drop column if exists completed_months;
+alter table public.services add column if not exists start_date date not null default current_date;
+alter table public.services alter column start_date drop default;
+alter table public.services drop constraint if exists services_total_months_check;
+alter table public.services add constraint services_total_months_check check (total_months between 1 and 120);
