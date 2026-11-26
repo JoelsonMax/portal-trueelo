@@ -340,3 +340,27 @@ alter table public.services add column if not exists start_date date not null de
 alter table public.services alter column start_date drop default;
 alter table public.services drop constraint if exists services_total_months_check;
 alter table public.services add constraint services_total_months_check check (total_months between 1 and 120);
+
+-- ---------------------------------------------------------------------
+-- 11. Solicitações de extensão de serviço (criadas pela função solicitar-extensao)
+-- ---------------------------------------------------------------------
+create table if not exists public.extension_requests (
+  id           uuid primary key default gen_random_uuid(),
+  client_id    uuid not null references public.profiles(id) on delete cascade,
+  months       int not null check (months between 1 and 120),
+  message      text check (char_length(message) <= 1000),
+  status       text not null default 'pendente' check (status in ('pendente', 'atendida', 'recusada')),
+  email_sent   boolean not null default false,
+  created_at   timestamptz not null default now(),
+  handled_by   uuid references public.profiles(id) on delete set null,
+  handled_at   timestamptz
+);
+create index if not exists extension_requests_client_idx on public.extension_requests (client_id, created_at desc);
+create index if not exists extension_requests_handled_by_idx on public.extension_requests (handled_by);
+alter table public.extension_requests enable row level security;
+drop policy if exists ext_select on public.extension_requests;
+create policy ext_select on public.extension_requests for select to authenticated
+  using (client_id = (select auth.uid()) or public.my_level() >= 2);
+drop policy if exists ext_update on public.extension_requests;
+create policy ext_update on public.extension_requests for update to authenticated
+  using (public.my_level() >= 4) with check (public.my_level() >= 4);

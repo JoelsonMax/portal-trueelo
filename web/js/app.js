@@ -86,6 +86,8 @@ const ICONS = {
   key: '<path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>',
   trash: '<path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>',
   plus: '<path d="M12 6v12M6 12h12"/>',
+  bell: '<path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>',
+  extend: '<path d="M12 8v4l3 3M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/>',
   link: '<path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>',
   download: '<path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>',
   whatsapp: '<path d="M3 21l1.65-4.95A8.5 8.5 0 1112 20.5a8.4 8.4 0 01-4.05-1.03L3 21z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 01-1.8-1.8l.8-1-1-2L9 9.5z"/>',
@@ -298,7 +300,8 @@ const MENU = [
   { id: 'linha',          label: 'Linha do Tempo',         icon: 'clock',    min: 1 },
   { id: 'relatorios',     label: 'Central de Relatórios',  icon: 'chart',    min: 1 },
   { id: 'conta',          label: 'Minha conta',            icon: 'user',     min: 1 },
-  { group: 'Administração',                                                  min: 3 },
+  { group: 'Administração',                                                  min: 2 },
+  { id: 'solicitacoes',   label: 'Solicitações',           icon: 'bell',     min: 2 },
   { id: 'usuarios',       label: 'Gerenciar usuários',     icon: 'users',    min: 4 },
   { id: 'adm-documentos', label: 'Enviar documentos',      icon: 'upload',   min: 3 },
   { id: 'adm-relatorios', label: 'Gerenciar relatórios',   icon: 'chart',    min: 3 },
@@ -317,9 +320,10 @@ function renderShell() {
 
   $('#menu').innerHTML = MENU.filter((m) => myLevel() >= m.min).map((m) => m.group
     ? `<div class="menu-group">${esc(m.group)}</div>`
-    : `<button type="button" class="menu-item${m.gold ? ' gold' : ''}" data-section="${m.id}">${icon(m.icon)}<span>${esc(m.label)}</span></button>`
+    : `<button type="button" class="menu-item${m.gold ? ' gold' : ''}" data-section="${m.id}">${icon(m.icon)}<span>${esc(m.label)}</span>${m.id === 'solicitacoes' ? '<span class="menu-badge hidden" id="badge-solicitacoes"></span>' : ''}</button>`
   ).join('');
 
+  refreshRequestsBadge();
   $$('#menu [data-section]').forEach((b) => b.addEventListener('click', () => {
     go(b.dataset.section);
     $('.app').classList.remove('menu-open');
@@ -349,6 +353,7 @@ const SECTIONS = {
   'adm-servicos': renderAdminServices,
   marca: renderBranding,
   propriedade: renderOwnership,
+  solicitacoes: renderRequests,
 };
 
 // ---------------------------------------------------------------------
@@ -393,7 +398,11 @@ function renderAccount(el) {
 // Gerenciar usuários
 // ---------------------------------------------------------------------
 async function callAdmin(action, payload = {}) {
-  const { data, error } = await sb.functions.invoke('admin-users', { body: { action, ...payload } });
+  return callFunction('admin-users', { action, ...payload });
+}
+
+async function callFunction(name, payload = {}) {
+  const { data, error } = await sb.functions.invoke(name, { body: payload });
   if (error) {
     let message = 'Não foi possível concluir a ação.';
     try { const body = await error.context.json(); if (body?.error) message = body.error; } catch { /* sem corpo */ }
@@ -835,7 +844,21 @@ async function renderTimeline(el) {
   if (isClient()) {
     const { data, error } = await sb.from('services').select('*').eq('client_id', state.profile.id).maybeSingle();
     if (error) { toast('Não foi possível carregar a linha do tempo.', 'error'); return; }
-    box.innerHTML = data ? `<div class="card">${timelineDetail(data)}</div>` : emptyCard('clock', 'Nenhum serviço em andamento');
+    const { data: pending } = await sb.from('extension_requests').select('months, created_at')
+      .eq('client_id', state.profile.id).eq('status', 'pendente').order('created_at', { ascending: false }).limit(1);
+    const req = pending?.[0];
+    box.innerHTML = `
+      ${data ? `<div class="card">${timelineDetail(data)}</div>` : emptyCard('clock', 'Nenhum serviço em andamento')}
+      <div class="card extend-card">
+        <div class="row-main">
+          <h4>Quer continuar com a True Elo?</h4>
+          <p>${req
+            ? `Você solicitou estender por <strong>${req.months} meses</strong> em ${fmtDate(req.created_at)}. Nossa equipe vai falar com você em breve.`
+            : 'Solicite a extensão do seu serviço em poucos cliques.'}</p>
+        </div>
+        <button type="button" class="btn btn-gold" id="btn-extend">${icon('extend')} Solicitar extensão do serviço</button>
+      </div>`;
+    $('#btn-extend', el).addEventListener('click', openExtendModal);
     return;
   }
 
@@ -1276,6 +1299,172 @@ async function renderOwnership(el) {
     toast('Transferência iniciada! Conclusão em 3 dias.');
     renderOwnership(el);
   });
+}
+
+// ---------------------------------------------------------------------
+// Solicitar extensão do serviço (cliente)
+// ---------------------------------------------------------------------
+const EXTEND_OPTIONS = [3, 6, 9, 12];
+
+function openExtendModal() {
+  openModal(`
+    <h3>Solicitar extensão do serviço</h3>
+    <form class="form" id="form-extend" novalidate>
+      <p class="muted" style="margin:0">Por quantos meses você gostaria de estender?</p>
+      <div class="choice-grid" role="radiogroup">
+        ${EXTEND_OPTIONS.map((m) => `<label class="choice"><input type="radio" name="months" value="${m}"><span>${m} meses</span></label>`).join('')}
+        <label class="choice"><input type="radio" name="months" value="outro"><span>Outro</span></label>
+      </div>
+      <label class="hidden" id="extend-other">Quantos meses?<input type="number" id="extend-other-input" min="1" max="120" placeholder="Ex.: 18"></label>
+      <label>Mensagem (opcional)<textarea id="extend-message" rows="3" maxlength="1000" placeholder="Quer contar algo para a equipe?"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+        <button type="submit" class="btn btn-gold">Solicitar</button>
+      </div>
+    </form>`);
+
+  const form = $('#form-extend');
+  form.addEventListener('change', () => {
+    const other = form.querySelector('input[name=months]:checked')?.value === 'outro';
+    $('#extend-other').classList.toggle('hidden', !other);
+    if (other) $('#extend-other-input').focus();
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const choice = form.querySelector('input[name=months]:checked')?.value;
+    if (!choice) { toast('Escolha por quantos meses deseja estender.', 'error'); return; }
+    const months = choice === 'outro' ? parseInt($('#extend-other-input').value, 10) : parseInt(choice, 10);
+    if (!(months >= 1 && months <= 120)) { toast('Informe uma quantidade de meses entre 1 e 120.', 'error'); return; }
+    const message = $('#extend-message').value.trim();
+
+    await busy(form.querySelector('[type=submit]'), async () => {
+      try {
+        await callFunction('solicitar-extensao', { months, message });
+        showExtendSuccess(months);
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
+function showExtendSuccess(months) {
+  const name = state.profile.name || '';
+  const wa = whatsappLink(`Olá! Sou ${name} e gostaria de solicitar estender o serviço com a True Elo por ${months} meses.`);
+  openModal(`
+    <div class="center">
+      <div class="status-icon status-ok" style="margin:0 auto 14px">✓</div>
+      <h3 style="margin-bottom:8px">Solicitação enviada com sucesso!</h3>
+      <p class="muted">Recebemos seu pedido para estender o serviço por <strong>${months} meses</strong>. A equipe da True Elo vai entrar em contato em breve.</p>
+      <p class="muted small">Se preferir, fale com a gente agora pelo WhatsApp:</p>
+    </div>
+    <div class="modal-actions" style="flex-direction:column">
+      ${wa ? `<a class="btn btn-whatsapp" href="${wa}" target="_blank" rel="noopener noreferrer">${icon('whatsapp')} Chamar no WhatsApp</a>` : ''}
+      <button type="button" class="btn btn-ghost" data-close>Fechar</button>
+    </div>`);
+  $$('[data-close]', $('#modal-card')).forEach((b) => b.addEventListener('click', () => { if (state.section === 'linha') go('linha'); }));
+}
+
+// ---------------------------------------------------------------------
+// Solicitações (painel da True Elo)
+// ---------------------------------------------------------------------
+async function refreshRequestsBadge() {
+  const badge = $('#badge-solicitacoes');
+  if (!badge) return;
+  const { count } = await sb.from('extension_requests').select('id', { count: 'exact', head: true }).eq('status', 'pendente');
+  badge.textContent = count || '';
+  badge.classList.toggle('hidden', !count);
+}
+
+const STATUS_LABEL = { pendente: 'Pendente', atendida: 'Atendida', recusada: 'Recusada' };
+
+async function renderRequests(el) {
+  await loadClients(true).catch(() => {});
+  el.innerHTML = `
+    <div class="page-head"><div><h1>Solicitações</h1><p class="muted">Pedidos de extensão de serviço feitos pelos clientes.</p></div></div>
+    <div class="toolbar">
+      <select id="req-filter" aria-label="Filtrar por situação">
+        <option value="pendente">Pendentes</option>
+        <option value="">Todas</option>
+        <option value="atendida">Atendidas</option>
+        <option value="recusada">Recusadas</option>
+      </select>
+    </div>
+    <div id="req-list" class="list">${loadingCard()}</div>`;
+
+  let items = []; let services = []; let phones = {};
+  async function load() {
+    const [r, s, p] = await Promise.all([
+      sb.from('extension_requests').select('*').order('created_at', { ascending: false }),
+      sb.from('services').select('*'),
+      sb.from('profiles').select('id, phone, email').eq('role', 'usuario'),
+    ]);
+    if (r.error) { toast('Não foi possível carregar as solicitações.', 'error'); return; }
+    items = r.data || []; services = s.data || [];
+    phones = Object.fromEntries((p.data || []).map((x) => [x.id, x]));
+    draw();
+    refreshRequestsBadge();
+  }
+
+  function draw() {
+    const f = $('#req-filter', el).value;
+    const list = items.filter((x) => !f || x.status === f);
+    const box = $('#req-list', el);
+    if (!list.length) { box.innerHTML = emptyCard('bell', f === 'pendente' ? 'Nenhuma solicitação pendente' : 'Nenhuma solicitação'); return; }
+    const canManage = myLevel() >= 4;
+    box.innerHTML = list.map((x, i) => {
+      const svc = services.find((s) => s.client_id === x.client_id);
+      const contact = phones[x.client_id] || {};
+      const phone = (contact.phone || '').replace(/\D/g, '');
+      const wa = phone ? `https://wa.me/${phone.length <= 11 ? '55' + phone : phone}?text=${encodeURIComponent(`Olá, ${firstName(clientName(x.client_id))}! Recebemos sua solicitação para estender o serviço por ${x.months} meses.`)}` : null;
+      return `
+        <div class="card">
+          <div class="row" style="padding:0;align-items:flex-start">
+            <div class="stat-icon gold sm">${icon('extend')}</div>
+            <div class="row-main">
+              <h4>${esc(clientName(x.client_id))} quer estender por ${x.months} meses</h4>
+              <p>Pedido em ${fmtDateTime(x.created_at)} · ${svc ? esc(statusLine(svc)) : 'Sem linha do tempo cadastrada'}</p>
+              ${x.message ? `<p class="req-message">“${esc(x.message)}”</p>` : ''}
+              <span class="badge ${x.status === 'pendente' ? 'owner' : x.status === 'atendida' ? 'admin' : ''}">${STATUS_LABEL[x.status]}</span>
+              ${x.status === 'pendente' && !x.email_sent ? '<span class="muted small"> · e-mail de aviso ainda não configurado</span>' : ''}
+            </div>
+          </div>
+          ${canManage || wa ? `<div class="req-actions">
+            ${wa ? `<a class="btn btn-ghost btn-sm" href="${wa}" target="_blank" rel="noopener noreferrer">${icon('whatsapp')} WhatsApp</a>` : ''}
+            ${canManage && x.status === 'pendente' && svc ? `<button type="button" class="btn btn-gold btn-sm" data-extend="${i}">Estender contrato +${x.months} meses</button>` : ''}
+            ${canManage && x.status === 'pendente' ? `<button type="button" class="btn btn-ghost btn-sm" data-status="atendida" data-i="${i}">Marcar como atendida</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-status="recusada" data-i="${i}" style="color:var(--danger)">Recusar</button>` : ''}
+          </div>` : ''}
+        </div>`;
+    }).join('');
+
+    $$('[data-extend]', box).forEach((b) => b.addEventListener('click', async () => {
+      const x = list[+b.dataset.extend];
+      const svc = services.find((s) => s.client_id === x.client_id);
+      const newTotal = svc.total_months + x.months;
+      const ok = await confirmModal({
+        title: 'Estender contrato?',
+        text: `O contrato de <strong>${esc(clientName(x.client_id))}</strong> passará de ${svc.total_months} para <strong>${newTotal} meses</strong>, com término em ${fmtDay(addMonthsISO(svc.start_date, newTotal))}.`,
+        confirmLabel: 'Estender', kind: 'gold',
+      });
+      if (!ok) return;
+      if (newTotal > 120) { toast('O contrato não pode passar de 120 meses.', 'error'); return; }
+      const { error } = await sb.from('services').update({ total_months: newTotal, updated_at: new Date().toISOString() }).eq('client_id', x.client_id);
+      if (error) { toast('Não foi possível estender o contrato.', 'error'); return; }
+      await sb.from('extension_requests').update({ status: 'atendida', handled_by: state.profile.id, handled_at: new Date().toISOString() }).eq('id', x.id);
+      toast('Contrato estendido!');
+      load();
+    }));
+    $$('[data-status]', box).forEach((b) => b.addEventListener('click', async () => {
+      const x = list[+b.dataset.i];
+      const { error } = await sb.from('extension_requests').update({ status: b.dataset.status, handled_by: state.profile.id, handled_at: new Date().toISOString() }).eq('id', x.id);
+      if (error) { toast('Não foi possível atualizar.', 'error'); return; }
+      toast(b.dataset.status === 'atendida' ? 'Marcada como atendida.' : 'Solicitação recusada.');
+      load();
+    }));
+  }
+
+  $('#req-filter', el).addEventListener('change', draw);
+  load();
 }
 
 // ---------------------------------------------------------------------

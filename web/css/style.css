@@ -272,6 +272,33 @@ label.btn { flex-direction: row; color: #fff; font-size: inherit; font-weight: 5
   .row-main h4 { white-space: normal; }
 }
 
+
+/* ---------- Extensão de serviço e solicitações ---------- */
+.menu-item { position: relative; }
+.menu-badge { margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--grad-gold); color: #120c02; font-size: .75rem; font-weight: 700; display: inline-grid; place-items: center; }
+.extend-card { margin-top: 18px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; border-color: rgba(192, 144, 77, .3); background: linear-gradient(135deg, rgba(192,144,77,.08), rgba(255,255,255,.03)); }
+.extend-card h4 { margin: 0 0 2px; font-size: 1.02rem; font-weight: 600; }
+.extend-card p { margin: 0; color: var(--muted); font-size: .9rem; white-space: normal; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+.choice { position: relative; cursor: pointer; }
+.choice input { position: absolute; opacity: 0; pointer-events: none; }
+.choice span { display: block; text-align: center; padding: 14px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); font-weight: 500; color: var(--text); transition: all .2s; }
+.choice:hover span { border-color: rgba(192,144,77,.5); }
+.choice input:checked + span { background: rgba(192,144,77,.16); border-color: var(--gold-bright); color: var(--gold-bright); box-shadow: 0 0 0 3px rgba(192,144,77,.15); }
+.choice input:focus-visible + span { outline: 2px solid var(--cyan-bright); outline-offset: 2px; }
+textarea { resize: vertical; min-height: 80px; }
+.status-ok { background: rgba(52, 211, 153, .15); color: var(--success); }
+.btn-whatsapp { background: #25d366; color: #052e16; font-weight: 600; }
+.btn-whatsapp:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(37, 211, 102, .3); }
+.req-message { white-space: normal !important; font-style: italic; color: #cdd3e3 !important; margin: 8px 0 4px !important; }
+.req-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.row-main h4 + p + .req-message { margin-top: 8px; }
+@media (max-width: 820px) {
+  .extend-card .btn { width: 100%; }
+  .req-actions .btn { flex: 1 1 auto; }
+  .card .row-main h4 { white-space: normal; }
+}
+
 /* ---------- Celular e tablet ---------- */
 @media (max-width: 960px) {
   .grid-3 { grid-template-columns: 1fr 1fr; }

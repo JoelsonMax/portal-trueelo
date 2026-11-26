@@ -9,4 +9,4 @@ export const SUPABASE_URL = 'https://luoxfwuhcqlhwsxoxykf.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_DW2tm6cIGHdW9cVdSpTQvQ_rW-UvZJ3';
 
 // Número do WhatsApp da True Elo (só dígitos, com 55 + DDD), ex.: '5585999999999'
-export const WHATSAPP_NUMBER = '';
+export const WHATSAPP_NUMBER = '5583986045199';
