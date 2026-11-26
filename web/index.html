@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#00001B">
+  <meta name="description" content="Portal do Cliente True Elo — onde o digital se conecta com o humano.">
+  <title>True Elo · Portal do Cliente</title>
+  <link rel="icon" type="image/png" href="assets/icon-64.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Carregando -->
+  <div id="screen-loading" class="screen screen-center">
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="muted">Carregando…</p>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <!-- Entrar -->
+  <main id="screen-login" class="screen screen-auth hidden">
+    <div class="auth-box">
+      <div class="brand brand-lg" data-logo></div>
+      <h1>Entrar</h1>
+      <p class="muted">Acesse seu portal exclusivo</p>
+      <form id="form-login" class="card form" novalidate>
+        <label>E-mail
+          <input type="email" name="email" autocomplete="email" placeholder="seu@email.com" required>
+        </label>
+        <label>Senha
+          <input type="password" name="password" autocomplete="current-password" placeholder="••••••••" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Entrar</button>
+        <button class="btn-link" type="button" data-go="screen-forgot">Esqueci minha senha</button>
+      </form>
+      <p class="muted small center">Primeiro acesso? Abra o convite que a True Elo enviou para o seu e-mail para criar sua senha.</p>
+    </div>
+  </main>
+
+  <!-- Esqueci minha senha -->
+  <main id="screen-forgot" class="screen screen-auth hidden">
+    <div class="auth-box">
+      <div class="brand brand-lg" data-logo></div>
+      <h1>Recuperar senha</h1>
+      <p class="muted">Escolha como deseja recuperar o acesso</p>
+      <div class="card form">
+        <div class="tabs" role="tablist">
+          <button type="button" class="tab active" data-tab="email" role="tab">Recuperar por e-mail</button>
+          <button type="button" class="tab" data-tab="phone" role="tab">Recuperar por celular</button>
+        </div>
+        <form id="form-forgot" class="form" data-panel="email" novalidate>
+          <label>E-mail cadastrado
+            <input type="email" name="email" autocomplete="email" placeholder="seu@email.com" required>
+          </label>
+          <button class="btn btn-primary" type="submit">Enviar link de recuperação</button>
+        </form>
+        <div class="form hidden" data-panel="phone">
+          <p class="muted small">A recuperação por celular (SMS) estará disponível em breve. Por enquanto, use a recuperação por e-mail ou fale com a True Elo.</p>
+        </div>
+        <button class="btn-link" type="button" data-go="screen-login">Voltar para Entrar</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Crie sua senha / Nova senha -->
+  <main id="screen-password" class="screen screen-auth hidden">
+    <div class="auth-box">
+      <div class="brand brand-lg" data-logo></div>
+      <h1 id="password-title">Crie sua senha</h1>
+      <p class="muted" id="password-subtitle">Defina uma senha para acessar seu portal</p>
+      <form id="form-password" class="card form" novalidate>
+        <label>Nova senha
+          <input type="password" name="password" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" required>
+        </label>
+        <label>Confirme a senha
+          <input type="password" name="confirm" autocomplete="new-password" placeholder="Repita a senha" required>
+        </label>
+        <p class="muted small">Use pelo menos 8 caracteres, com letras e números.</p>
+        <button class="btn btn-primary" type="submit">Salvar senha</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- Acesso negado -->
+  <div id="screen-denied" class="screen screen-center hidden">
+    <div class="status-icon status-danger">!</div>
+    <h2>Acesso negado</h2>
+    <p class="muted">Você não tem permissão para acessar esta página.</p>
+    <button class="btn btn-primary" type="button" data-action="logout">Voltar para Entrar</button>
+  </div>
+
+  <!-- Sessão expirada -->
+  <div id="screen-expired" class="screen screen-center hidden">
+    <div class="status-icon status-warn">⏱</div>
+    <h2>Sessão expirada</h2>
+    <p class="muted">Por segurança, sua sessão terminou. Entre novamente.</p>
+    <button class="btn btn-primary" type="button" data-go="screen-login">Entrar</button>
+  </div>
+
+  <!-- Portal -->
+  <div id="screen-app" class="screen hidden">
+    <div class="app">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <div class="brand" data-logo></div>
+          <button class="icon-btn only-mobile" type="button" data-action="close-menu" aria-label="Fechar menu">✕</button>
+        </div>
+        <nav id="menu" class="menu" aria-label="Menu principal"></nav>
+        <div class="sidebar-user">
+          <div class="avatar" id="user-avatar"></div>
+          <div class="user-info">
+            <strong id="user-name"></strong>
+            <span id="user-role"></span>
+          </div>
+          <button class="icon-btn" type="button" data-action="logout" title="Sair" aria-label="Sair">
+            <svg viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          </button>
+        </div>
+      </aside>
+      <div class="backdrop only-mobile" data-action="close-menu"></div>
+
+      <div class="main">
+        <header class="topbar only-mobile">
+          <button class="icon-btn" type="button" data-action="open-menu" aria-label="Abrir menu">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="brand brand-sm" data-logo></div>
+          <span class="topbar-spacer"></span>
+        </header>
+        <section id="content" class="content"></section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Janela modal -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card" id="modal-card"></div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
