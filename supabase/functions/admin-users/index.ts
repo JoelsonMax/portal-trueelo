@@ -41,9 +41,14 @@ Deno.serve(async (req) => {
   try {
     const url = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    // Endereço do portal para onde os links de e-mail levam. Se SITE_URL não
-    // estiver configurado, usa o endereço de onde o pedido veio.
-    const siteUrl = Deno.env.get("SITE_URL") || req.headers.get("Origin") || undefined;
+    // O portal envia o próprio endereço (com o caminho, ex.: /portal-trueelo/); só é aceito
+    // se for do mesmo site de onde veio o pedido.
+    const origin = req.headers.get("Origin") || "";
+    const body = await req.json().catch(() => ({}));
+    const asked = typeof body.redirectTo === "string" ? body.redirectTo : "";
+    const siteUrl = Deno.env.get("SITE_URL")
+      || (origin && asked.startsWith(origin + "/") ? asked : undefined)
+      || origin || undefined;
 
     const admin = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -64,7 +69,6 @@ Deno.serve(async (req) => {
     const myLevel = LEVEL[me.role] ?? 0;
     if (myLevel < MANAGE_MIN_LEVEL) return fail("Acesso negado", 403);
 
-    const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "");
 
     // Carrega o usuário-alvo e confere se quem pede pode mexer nele.

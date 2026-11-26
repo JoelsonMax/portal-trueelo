@@ -97,7 +97,9 @@ Deno.serve(async (req) => {
     // E-mail para a True Elo
     const { data: owner } = await admin.from("profiles").select("name, email").eq("role", "proprietario").maybeSingle();
     const notifyTo = Deno.env.get("NOTIFY_EMAIL") || owner?.email;
-    const site = Deno.env.get("SITE_URL") || req.headers.get("Origin") || "";
+    const origin = req.headers.get("Origin") || "";
+    const askedSite = typeof body.siteUrl === "string" && origin && body.siteUrl.startsWith(origin + "/") ? body.siteUrl : "";
+    const site = Deno.env.get("SITE_URL") || askedSite || origin;
     let sent = false;
     if (notifyTo) {
       sent = await sendEmail(

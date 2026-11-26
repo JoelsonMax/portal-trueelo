@@ -398,7 +398,7 @@ function renderAccount(el) {
 // Gerenciar usuários
 // ---------------------------------------------------------------------
 async function callAdmin(action, payload = {}) {
-  return callFunction('admin-users', { action, ...payload });
+  return callFunction('admin-users', { action, redirectTo: SITE_URL, ...payload });
 }
 
 async function callFunction(name, payload = {}) {
@@ -1340,7 +1340,7 @@ function openExtendModal() {
 
     await busy(form.querySelector('[type=submit]'), async () => {
       try {
-        await callFunction('solicitar-extensao', { months, message });
+        await callFunction('solicitar-extensao', { months, message, siteUrl: SITE_URL });
         showExtendSuccess(months);
       } catch (err) { toast(err.message, 'error'); }
     });

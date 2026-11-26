@@ -1,6 +1,6 @@
 // Service worker mínimo: permite instalar o portal como aplicativo.
 // Não guarda dados dos clientes em cache — tudo vem sempre do servidor.
-const SHELL = 'trueelo-shell-v4';
+const SHELL = 'trueelo-shell-v5';
 const ASSETS = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/config.js', 'assets/logo-simbolo.png'];
 
 self.addEventListener('install', (e) => {
