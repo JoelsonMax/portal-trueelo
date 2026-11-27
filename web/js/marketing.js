@@ -507,12 +507,12 @@ const SECRET_FIELDS = [
   { key: 'meta_api_token', label: 'Token de acesso da Meta para ler as campanhas', help: 'Configurações do Negócio → Usuários do sistema → Gerar token (permissões ads_read e business_management).' },
   { key: 'google_client_id', label: 'Google: Client ID (OAuth)', help: 'Google Cloud → APIs e serviços → Credenciais → ID do cliente OAuth.' },
   { key: 'google_client_secret', label: 'Google: Client Secret (OAuth)', help: 'Mesma tela do Client ID.' },
-  { key: 'google_developer_token', label: 'Google Ads: Developer token', help: 'Conta de administrador (MCC) → Administrador → Central da API.' },
-  { key: 'google_login_customer_id', label: 'Google Ads: ID da conta de administrador (MCC)', help: 'Número da conta MCC, formato 123-456-7890.' },
+  { key: 'google_developer_token', label: 'Google Ads: Developer token (opcional)', help: 'Não é mais exigido: desde 09/09/2026 o acesso à API do Google Ads é liberado no próprio projeto do Google Cloud (Google Ads API → Visão geral → nível de acesso). Só preencha se tiver um token antigo.' },
+  { key: 'google_login_customer_id', label: 'Google Ads: ID da conta de administrador (MCC)', help: 'Número da conta de administrador da True Elo, formato 123-456-7890 (a da True Elo é 928-057-9742).' },
 ];
 const ADVANCED_FIELDS = [
   { key: 'int_meta_api_version', label: 'Versão da API da Meta', ph: 'v23.0' },
-  { key: 'int_google_ads_api_version', label: 'Versão da API do Google Ads', ph: 'v21' },
+  { key: 'int_google_ads_api_version', label: 'Versão da API do Google Ads', ph: 'v26' },
 ];
 
 export async function renderIntegrations(el) {

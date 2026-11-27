@@ -7,7 +7,11 @@
 //
 // Segredos usados (tabela integration_secrets, nunca expostos ao navegador):
 //  meta_api_token, google_client_id, google_client_secret, google_refresh_token,
-//  google_developer_token, google_login_customer_id
+//  google_login_customer_id e, opcionalmente, google_developer_token.
+//  Desde 09/09/2026 o Google aposentou o developer token: o nível de acesso à
+//  API do Google Ads vem do projeto do Google Cloud dono do Client ID/Secret
+//  ("Google Ads API Overview" no Cloud Console). Se houver token salvo, ele é
+//  enviado por compatibilidade; se não houver, a chamada segue sem ele.
 // Versões das APIs (tabela settings, opcionais): int_meta_api_version, int_google_ads_api_version
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -22,7 +26,7 @@ const json = (body: unknown, status = 200) =>
 
 const LEVEL: Record<string, number> = { proprietario: 6, administrador: 5, moderador: 4, editor: 3, equipe: 2, usuario: 1 };
 const DEFAULT_META_VERSION = "v23.0";
-const DEFAULT_GOOGLE_ADS_VERSION = "v21";
+const DEFAULT_GOOGLE_ADS_VERSION = "v26";
 
 type Row = {
   client_id: string; source: string; day: string;
@@ -107,7 +111,6 @@ Deno.serve(async (req) => {
     if (c.google_ads_customer_id) {
       try {
         if (!googleToken) throw new Error(googleTokenError ?? "Google não conectado");
-        if (!secrets.google_developer_token) throw new Error("Developer token do Google Ads não configurado");
         const rows = await fetchGoogleAds(c.client_id, c.google_ads_customer_id, googleToken, secrets, adsVersion, range);
         await upsert(admin, rows);
         s.google_ads = `ok (${rows.length} dias)`;
@@ -222,9 +225,9 @@ async function fetchGoogleAds(clientId: string, customerId: string, token: strin
   const cid = customerId.replace(/\D/g, "");
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
-    "developer-token": secrets.google_developer_token,
     "Content-Type": "application/json",
   };
+  if (secrets.google_developer_token) headers["developer-token"] = secrets.google_developer_token;
   if (secrets.google_login_customer_id) headers["login-customer-id"] = secrets.google_login_customer_id.replace(/\D/g, "");
   const query = `SELECT segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value
                  FROM customer WHERE segments.date BETWEEN '${range.since}' AND '${range.until}'`;
