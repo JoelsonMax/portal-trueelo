@@ -92,6 +92,12 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .form { display: flex; flex-direction: column; gap: 16px; }
 .auth-box .card { margin: 20px 0 18px; }
+.auth-about { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); text-align: center; }
+.auth-about h2 { font-size: .95rem; font-weight: 600; margin: 0 0 6px; color: var(--text); }
+.auth-about p { font-size: .82rem; color: var(--muted); margin: 0 0 8px; line-height: 1.55; }
+.auth-legal { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 10px; font-size: .82rem; color: var(--muted); }
+.auth-legal a { color: var(--cyan-bright); text-decoration: none; }
+.auth-legal a:hover { text-decoration: underline; }
 label { display: flex; flex-direction: column; gap: 7px; font-size: .88rem; font-weight: 500; color: #cdd3e3; }
 input, select, textarea {
   font: inherit; color: var(--text); background: rgba(255,255,255,.05);

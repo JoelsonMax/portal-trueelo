@@ -7,7 +7,10 @@
 //
 // Guarda o refresh token em integration_secrets (google_refresh_token).
 // No Google Cloud, o "URI de redirecionamento autorizado" deve ser:
-//   https://luoxfwuhcqlhwsxoxykf.supabase.co/functions/v1/google-oauth
+//   https://joelsonmax.github.io/portal-trueelo/oauth/google.html
+// Essa página fica no domínio do portal (exigência da verificação do Google)
+// e só repassa ?code=&state= para esta função. Para outro domínio, defina o
+// segredo GOOGLE_REDIRECT_URI da função com o endereço da página oauth/google.html.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -31,7 +34,7 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-oauth`;
+  const redirectUri = Deno.env.get("GOOGLE_REDIRECT_URI") || `${DEFAULT_SITE}oauth/google.html`;
   const getSecret = async (key: string) =>
     (await admin.from("integration_secrets").select("value").eq("key", key).maybeSingle()).data?.value ?? "";
   const setSecret = (key: string, value: string) =>

@@ -517,7 +517,7 @@ const ADVANCED_FIELDS = [
 
 export async function renderIntegrations(el) {
   const { $, $$, esc, sb, toast, busy, callFunction } = ctx;
-  const redirectUri = `${ctx.SUPABASE_URL}/functions/v1/google-oauth`;
+  const redirectUri = new URL('oauth/google.html', location.href.split('#')[0]).href;
 
   const [{ data: settingsRows }, { data: status }] = await Promise.all([
     sb.from('settings').select('key, value').like('key', 'int_%'),

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <title>Conectando ao Google · Portal do Cliente True Elo</title>
+  <link rel="icon" type="image/png" href="../assets/icon-64.png">
+  <link rel="stylesheet" href="../css/legal.css">
+</head>
+<body>
+  <!-- Endereço de retorno do Google (URI de redirecionamento autorizado).
+       Fica no domínio do portal para que o app possa ser verificado pelo Google.
+       Só repassa o código de autorização ao servidor do portal, que troca o
+       código pela chave de acesso e volta para a tela de Integrações. -->
+  <div class="center-screen">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Conectando o portal ao Google…</p>
+    <p style="color:var(--muted);font-size:.9rem">Se nada acontecer em alguns segundos, <a id="manual" href="../#integracoes">volte para as Integrações</a>.</p>
+  </div>
+  <script type="module">
+    import { SUPABASE_URL } from '../js/config.js';
+    const params = new URLSearchParams(location.search);
+    const allowed = new URLSearchParams();
+    for (const key of ['code', 'state', 'error', 'scope']) {
+      if (params.has(key)) allowed.set(key, params.get(key));
+    }
+    const target = `${SUPABASE_URL}/functions/v1/google-oauth?${allowed.toString()}`;
+    document.getElementById('manual').href = target;
+    location.replace(target);
+  </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+/* Páginas públicas (Política de Privacidade, Termos de Uso, retorno do Google).
+   Usa as mesmas cores do portal, sem depender do app. */
+:root {
+  --bg: #00001b;
+  --panel: #060b3a;
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #f1f4fa;
+  --muted: #9aa3bd;
+  --cyan: #389cb6;
+  --cyan-bright: #4fc3df;
+  --gold: #c0904d;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(56, 156, 182, 0.12), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(192, 144, 77, 0.08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.65;
+}
+a { color: var(--cyan-bright); }
+.legal-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  max-width: 860px; margin: 0 auto; padding: 24px 20px 8px;
+}
+.legal-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+.legal-brand img { width: 44px; height: 44px; border-radius: 50%; }
+.legal-brand span { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
+.legal-brand .t { color: var(--cyan); }
+.legal-brand .e { color: var(--gold); }
+.legal-back { font-size: .92rem; white-space: nowrap; }
+main.legal {
+  max-width: 860px; margin: 16px auto 40px; padding: 32px 28px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 14px;
+}
+main.legal h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.02em; }
+main.legal h2 { font-size: 1.2rem; margin: 32px 0 8px; color: var(--cyan-bright); }
+main.legal h3 { font-size: 1.02rem; margin: 20px 0 6px; }
+main.legal p, main.legal li { color: #dfe4f1; }
+main.legal ul { padding-left: 22px; }
+main.legal li { margin: 4px 0; }
+.legal-meta { color: var(--muted); font-size: .92rem; margin: 0 0 24px; }
+.legal-box {
+  border-left: 3px solid var(--gold); background: rgba(192, 144, 77, 0.08);
+  padding: 14px 16px; border-radius: 8px; margin: 18px 0;
+}
+.legal-box p { margin: 6px 0; }
+table.legal-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: .95rem; }
+table.legal-table th, table.legal-table td { text-align: left; vertical-align: top; padding: 10px; border-bottom: 1px solid var(--border); }
+table.legal-table th { color: var(--muted); font-weight: 600; }
+.legal-footer { max-width: 860px; margin: 0 auto 32px; padding: 0 20px; color: var(--muted); font-size: .88rem; text-align: center; }
+.legal-footer a { margin: 0 8px; }
+.center-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
+.spinner { width: 38px; height: 38px; border-radius: 50%; border: 3px solid rgba(255,255,255,.15); border-top-color: var(--cyan-bright); animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  main.legal { padding: 22px 18px; margin: 10px 12px 32px; }
+  main.legal h1 { font-size: 1.55rem; }
+  table.legal-table, table.legal-table tbody, table.legal-table tr, table.legal-table td, table.legal-table th { display: block; width: 100%; }
+  table.legal-table thead { display: none; }
+  table.legal-table td { border-bottom: none; padding: 4px 0; }
+  table.legal-table tr { border-bottom: 1px solid var(--border); padding: 10px 0; }
+}
