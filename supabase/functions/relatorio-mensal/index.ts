@@ -22,7 +22,7 @@ const json = (body: unknown, status = 200) =>
 const fail = (msg: string, status = 400) => json({ error: msg }, status);
 
 const LEVEL: Record<string, number> = { proprietario: 6, administrador: 5, moderador: 4, editor: 3, equipe: 2, usuario: 1 };
-const DEFAULT_SITE = "https://joelsonmax.github.io/portal-trueelo/";
+const DEFAULT_SITE = "https://portal.trueelo.com.br/";
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 const esc = (v: unknown) =>

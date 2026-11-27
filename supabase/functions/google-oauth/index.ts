@@ -7,7 +7,7 @@
 //
 // Guarda o refresh token em integration_secrets (google_refresh_token).
 // No Google Cloud, o "URI de redirecionamento autorizado" deve ser:
-//   https://joelsonmax.github.io/portal-trueelo/oauth/google.html
+//   https://portal.trueelo.com.br/oauth/google.html
 // Essa página fica no domínio do portal (exigência da verificação do Google)
 // e só repassa ?code=&state= para esta função. Para outro domínio, defina o
 // segredo GOOGLE_REDIRECT_URI da função com o endereço da página oauth/google.html.
@@ -26,7 +26,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/adwords",
   "https://www.googleapis.com/auth/analytics.readonly",
 ].join(" ");
-const DEFAULT_SITE = "https://joelsonmax.github.io/portal-trueelo/";
+const DEFAULT_SITE = "https://portal.trueelo.com.br/";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
